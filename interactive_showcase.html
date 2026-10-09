@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Negoo Ecosystem — Interactive Partner Console & Platform Showcase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #0A0A0A;
+      --bg-surface: #121214;
+      --bg-card: #18181B;
+      --bg-card-hover: #222226;
+      --gold-primary: #D4AF37;
+      --gold-glow: rgba(212, 175, 55, 0.25);
+      --gold-border: rgba(212, 175, 55, 0.4);
+      --text-main: #FFFFFF;
+      --text-muted: #A1A1AA;
+      --text-gold: #F5D77F;
+      --green-accent: #22C55E;
+      --red-accent: #EF4444;
+      --blue-accent: #3B82F6;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Ambient Gold Atmosphere */
+    .glow-orb {
+      position: fixed;
+      width: 500px;
+      height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(212, 175, 55, 0.12) 0%, rgba(10, 10, 10, 0) 70%);
+      top: -150px;
+      right: -100px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .glow-orb-2 {
+      position: fixed;
+      width: 450px;
+      height: 450px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, rgba(10, 10, 10, 0) 70%);
+      bottom: -150px;
+      left: -100px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Header & Navigation */
+    header {
+      position: sticky;
+      top: 0;
+      background: rgba(18, 18, 20, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+      z-index: 100;
+      padding: 1rem 2rem;
+    }
+
+    .nav-container {
+      max-width: 1300px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo-cluster {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #D4AF37, #996515);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 20px;
+      color: #000;
+      box-shadow: 0 0 15px var(--gold-glow);
+    }
+
+    .logo-text h1 {
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: var(--text-main);
+    }
+
+    .logo-text span {
+      font-size: 0.72rem;
+      color: var(--gold-primary);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-weight: 700;
+    }
+
+    .nav-tabs {
+      display: flex;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 4px;
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .tab-btn.active {
+      color: #000;
+      background: var(--gold-primary);
+      box-shadow: 0 0 12px var(--gold-glow);
+    }
+
+    /* Main Container */
+    main {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 2.5rem 2rem 4rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Hero Section */
+    .hero {
+      text-align: center;
+      max-width: 860px;
+      margin: 0 auto 3.5rem;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 50px;
+      background: rgba(212, 175, 55, 0.1);
+      border: 1px solid var(--gold-border);
+      color: var(--gold-text, #F5D77F);
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 1.25rem;
+    }
+
+    .badge-pill .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--gold-primary);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--gold-primary);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .hero h2 {
+      font-size: 2.75rem;
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 1rem;
+      background: linear-gradient(180deg, #FFFFFF 30%, #A1A1AA 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* Tab Content Panels */
+    .tab-panel {
+      display: none;
+      animation: fadeIn 0.3s ease forwards;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 1. ECOSYSTEM MAP TAB */
+    .ecosystem-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .eco-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 1.75rem;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .eco-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255, 255, 255, 0.18);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .eco-card.featured {
+      border-color: var(--gold-border);
+      box-shadow: 0 8px 30px rgba(212, 175, 55, 0.12);
+      background: linear-gradient(180deg, #18181C 0%, #121214 100%);
+    }
+
+    .eco-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1.25rem;
+    }
+
+    .eco-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .eco-card.featured .eco-icon {
+      background: rgba(212, 175, 55, 0.15);
+      border-color: var(--gold-border);
+    }
+
+    .repo-tag {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+    }
+
+    .eco-card.featured .repo-tag {
+      background: var(--gold-primary);
+      color: #000;
+      font-weight: 700;
+    }
+
+    .eco-card h3 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: var(--text-main);
+    }
+
+    .eco-card p {
+      font-size: 0.92rem;
+      color: var(--text-muted);
+      margin-bottom: 1.25rem;
+    }
+
+    .eco-features {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: #D4D4D8;
+    }
+
+    .eco-features li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .eco-features li::before {
+      content: "✦";
+      color: var(--gold-primary);
+      font-size: 0.75rem;
+    }
+
+    /* Central Hub Card */
+    .hub-card {
+      background: linear-gradient(135deg, rgba(62, 207, 142, 0.08) 0%, rgba(18, 18, 20, 0.9) 100%);
+      border: 1px solid rgba(62, 207, 142, 0.3);
+      border-radius: 16px;
+      padding: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2.5rem;
+      gap: 2rem;
+    }
+
+    .hub-info h3 {
+      font-size: 1.4rem;
+      color: #3ECF8E;
+      margin-bottom: 0.5rem;
+    }
+
+    .hub-info p {
+      color: var(--text-muted);
+      font-size: 0.92rem;
+      max-width: 700px;
+    }
+
+    .hub-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .hub-badge {
+      background: rgba(62, 207, 142, 0.15);
+      border: 1px solid rgba(62, 207, 142, 0.3);
+      color: #A7F3D0;
+      font-size: 0.75rem;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+    }
+
+    /* 2. INTERACTIVE SIMULATOR TAB */
+    .simulator-container {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 2rem;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    .sim-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .sim-header h3 {
+      font-size: 1.3rem;
+      font-weight: 700;
+    }
+
+    .sim-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      color: var(--green-accent);
+      background: rgba(34, 197, 94, 0.1);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+
+    .sim-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+
+    .sim-col {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 1.5rem;
+    }
+
+    .sim-col h4 {
+      font-size: 1.05rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sim-form-group {
+      margin-bottom: 1rem;
+    }
+
+    .sim-form-group label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .sim-input {
+      width: 100%;
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      color: #FFF;
+      font-family: inherit;
+      font-size: 0.95rem;
+    }
+
+    .sim-input:focus {
+      outline: none;
+      border-color: var(--gold-primary);
+    }
+
+    .sim-btn-primary {
+      width: 100%;
+      padding: 12px;
+      background: var(--gold-primary);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .sim-btn-primary:hover {
+      box-shadow: 0 0 15px var(--gold-glow);
+      transform: translateY(-1px);
+    }
+
+    /* Live Bid Card in Simulator */
+    .sim-live-bid {
+      background: #0E0E10;
+      border: 1px solid var(--gold-border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-top: 1rem;
+      display: none;
+      animation: popIn 0.3s ease;
+    }
+
+    @keyframes popIn {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .bid-countdown-bar {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .bid-countdown-progress {
+      height: 100%;
+      width: 100%;
+      background: var(--gold-primary);
+      transition: width 1s linear;
+    }
+
+    .bid-price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 12px 0 16px;
+    }
+
+    .strike-price {
+      text-decoration: line-through;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .proposed-price {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--green-accent);
+    }
+
+    .sim-action-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .sim-btn-decline {
+      padding: 10px;
+      background: transparent;
+      border: 1px solid var(--red-accent);
+      color: var(--red-accent);
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .sim-btn-accept {
+      padding: 10px;
+      background: var(--gold-primary);
+      border: none;
+      color: #000;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    /* Ledger Summary */
+    .ledger-box {
+      margin-top: 1.5rem;
+      background: #0E0E10;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 1rem;
+    }
+
+    .ledger-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 0.88rem;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+    }
+
+    .ledger-item:last-child {
+      border-bottom: none;
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--gold-text, #F5D77F);
+      margin-top: 6px;
+    }
+
+    /* 3. SCREENSHOTS GALLERY TAB */
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1.25rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .gallery-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 1rem;
+      text-align: center;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .gallery-card:hover {
+      transform: translateY(-6px);
+      border-color: var(--gold-border);
+      box-shadow: 0 10px 25px rgba(212, 175, 55, 0.15);
+    }
+
+    .screenshot-thumb {
+      width: 100%;
+      height: 380px;
+      object-fit: cover;
+      object-position: top;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      margin-bottom: 0.75rem;
+      background: #000;
+    }
+
+    .gallery-card h4 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .gallery-card p {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    /* 4. CODE & SCHEMA TAB */
+    .code-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    .code-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .code-header {
+      background: #18181C;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .code-title {
+      font-size: 0.85rem;
+      font-family: var(--font-mono);
+      color: var(--gold-text, #F5D77F);
+    }
+
+    pre {
+      padding: 1.25rem;
+      background: #0D0D0F;
+      color: #E4E4E7;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      overflow-x: auto;
+      line-height: 1.5;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border-subtle);
+      padding: 2rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    footer a {
+      color: var(--gold-primary);
+      text-decoration: none;
+    }
+
+    @media (max-width: 900px) {
+      .ecosystem-grid { grid-template-columns: 1fr; }
+      .gallery-grid { grid-template-columns: repeat(2, 1fr); }
+      .sim-layout { grid-template-columns: 1fr; }
+      .code-grid { grid-template-columns: 1fr; }
+      .hub-card { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="glow-orb"></div>
+  <div class="glow-orb-2"></div>
+
+  <!-- Header -->
+  <header>
+    <div class="nav-container">
+      <a href="#" class="logo-cluster">
+        <div class="logo-icon">N</div>
+        <div class="logo-text">
+          <h1>NEGOO</h1>
+          <span>Partner Console</span>
+        </div>
+      </a>
+      <div class="nav-tabs">
+        <button class="tab-btn active" onclick="switchTab('ecosystem')">🌐 Ecosystem</button>
+        <button class="tab-btn" onclick="switchTab('simulator')">⚡ Live Bid Demo</button>
+        <button class="tab-btn" onclick="switchTab('gallery')">📸 UI Showcase</button>
+        <button class="tab-btn" onclick="switchTab('schema')">🗄️ Realtime Schema</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero Banner -->
+    <section class="hero">
+      <div class="badge-pill">
+        <span class="pulse-dot"></span>
+        Tri-App Hospitality Commerce Network
+      </div>
+      <h2>Dynamic Room Bidding & Inventory Ecosystem</h2>
+      <p>
+        Explore how the <strong>Negoo Partner Console</strong> integrates with the <strong>Guest App</strong> and <strong>Super Admin Portal</strong> through sub-second Supabase Realtime synchronization.
+      </p>
+    </section>
+
+    <!-- TAB 1: ECOSYSTEM MATRIX -->
+    <section id="tab-ecosystem" class="tab-panel active">
+      <div class="hub-card">
+        <div class="hub-info">
+          <h3>⚡ Central Nervous System: Supabase Realtime PostgreSQL Hub</h3>
+          <p>
+            Zero-broker architecture with <code>REPLICA IDENTITY FULL</code> and PostGIS spatial queries. Synchronizes guest bid proposals, partner decisions, and administrator KYC verifications across all clients without Firebase cloud functions.
+          </p>
+        </div>
+        <div class="hub-badges">
+          <span class="hub-badge">PostGIS Spatial (50km Radius)</span>
+          <span class="hub-badge">WebSockets Publication</span>
+          <span class="hub-badge">Row-Level Security (RLS)</span>
+          <span class="hub-badge">Sub-2ms B-Tree Indexes</span>
+        </div>
+      </div>
+
+      <div class="ecosystem-grid">
+        <!-- Guest App Card -->
+        <div class="eco-card">
+          <div class="eco-card-header">
+            <div class="eco-icon">📱</div>
+            <span class="repo-tag">negoo_2</span>
+          </div>
+          <h3>Negoo Guest App</h3>
+          <p>Mobile experience for travelers looking to secure personalized room rates through flash negotiations.</p>
+          <ul class="eco-features">
+            <li>PostGIS Proximity Search (<code>get_nearby_hotels</code>)</li>
+            <li>Real-time room offer bidding slider</li>
+            <li>Instant deal confirmation & receipts</li>
+            <li>Saved property favorites & reviews</li>
+          </ul>
+        </div>
+
+        <!-- Partner Console (Featured) -->
+        <div class="eco-card featured">
+          <div class="eco-card-header">
+            <div class="eco-icon">🏨</div>
+            <span class="repo-tag">negoo_hotel_app (THIS REPO)</span>
+          </div>
+          <h3>Negoo Partner Console</h3>
+          <p>Mission-critical workstation for hotel owners to evaluate live offers and control room allocations.</p>
+          <ul class="eco-features">
+            <li>Live incoming offers with 60s countdown</li>
+            <li>Haptic alerts on incoming guest pitches</li>
+            <li>Suite variant creator with 5-image uploads</li>
+            <li>Automated 10% platform fee balance ledger</li>
+          </ul>
+        </div>
+
+        <!-- Super Admin Card -->
+        <div class="eco-card">
+          <div class="eco-card-header">
+            <div class="eco-icon">🛡️</div>
+            <span class="repo-tag">negoo_super_admin</span>
+          </div>
+          <h3>Super Admin Portal</h3>
+          <p>Platform governance console auditing property onboarding and ecosystem financial flows.</p>
+          <ul class="eco-features">
+            <li>KYC document verification pipeline</li>
+            <li>Instant <code>is_approved</code> WebSocket hot-swap</li>
+            <li>Cross-city GMV & transaction monitors</li>
+            <li>Partner payout disbursement audits</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: LIVE SIMULATOR -->
+    <section id="tab-simulator" class="tab-panel">
+      <div class="simulator-container">
+        <div class="sim-header">
+          <div>
+            <h3>⚡ Live Bid Negotiation Interactive Simulator</h3>
+            <p style="color: var(--text-muted); font-size: 0.88rem;">Experience how bids propagate in real-time from the traveler to the hotelier.</p>
+          </div>
+          <div class="sim-status">
+            <span class="pulse-dot"></span>
+            Realtime Channel Active
+          </div>
+        </div>
+
+        <div class="sim-layout">
+          <!-- Traveler Column -->
+          <div class="sim-col">
+            <h4>📱 Traveler Device (Guest App)</h4>
+            <div class="sim-form-group">
+              <label>Guest Name</label>
+              <input type="text" id="sim-guest-name" class="sim-input" value="Ghulam Mohiuddin" />
+            </div>
+            <div class="sim-form-group">
+              <label>Selected Suite</label>
+              <input type="text" id="sim-room-type" class="sim-input" value="Executive King Suite" readonly />
+            </div>
+            <div class="sim-form-group">
+              <label>Standard Listed Rate</label>
+              <input type="text" class="sim-input" value="PKR 5,000 / night" readonly />
+            </div>
+            <div class="sim-form-group">
+              <label>Proposed Offer Price (PKR)</label>
+              <input type="number" id="sim-bid-amount" class="sim-input" value="4250" />
+            </div>
+            <button class="sim-btn-primary" onclick="simulatePlaceBid()">⚡ Submit Live Bid to Hotel</button>
+          </div>
+
+          <!-- Hotelier Column -->
+          <div class="sim-col">
+            <h4>🏨 Partner Console (Negoo Hotel App)</h4>
+            <div id="sim-waiting-state" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem;">📡</div>
+              <p>Listening on channel <code>bids:hotel_id</code>...</p>
+              <span style="font-size: 0.8rem; color: #71717A;">Submit a bid on the left to trigger the live ticker.</span>
+            </div>
+
+            <!-- Dynamic Bid Card -->
+            <div id="sim-live-bid" class="sim-live-bid">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span id="bid-card-guest" style="font-weight: 700; color: #FFF;"></span>
+                <span id="bid-timer-label" style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--gold-primary); background: rgba(212, 175, 55, 0.1); padding: 2px 8px; border-radius: 6px;">60s left</span>
+              </div>
+              <div class="bid-countdown-bar">
+                <div id="bid-timer-bar" class="bid-countdown-progress"></div>
+              </div>
+              <div class="bid-price-row">
+                <span class="strike-price">Standard: PKR 5,000</span>
+                <span id="bid-card-offer" class="proposed-price">PKR 4,250</span>
+              </div>
+              <div class="sim-action-row">
+                <button class="sim-btn-decline" onclick="simulateDecision(false)">DECLINE</button>
+                <button class="sim-btn-accept" onclick="simulateDecision(true)">ACCEPT OFFER</button>
+              </div>
+            </div>
+
+            <!-- Financial Matrix Preview -->
+            <div class="ledger-box">
+              <h5 style="color: var(--gold-primary); font-size: 0.85rem; text-transform: uppercase; margin-bottom: 8px;">Financial Settlement Matrix</h5>
+              <div class="ledger-item">
+                <span>Confirmed Gross:</span>
+                <span id="ledger-gross">PKR 0</span>
+              </div>
+              <div class="ledger-item">
+                <span>Negoo Platform Fee (10%):</span>
+                <span id="ledger-fee" style="color: var(--red-accent);">- PKR 0</span>
+              </div>
+              <div class="ledger-item">
+                <span>Net Disbursable Balance:</span>
+                <span id="ledger-net">PKR 0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: SCREENSHOTS GALLERY -->
+    <section id="tab-gallery" class="tab-panel">
+      <div class="gallery-grid">
+        <div class="gallery-card">
+          <img src="screenshots/Screenshot_1791571750.png" class="screenshot-thumb" alt="Partner Sign In" />
+          <h4>Partner Sign-In</h4>
+          <p>Corporate access & KYC check</p>
+        </div>
+        <div class="gallery-card">
+          <img src="screenshots/Screenshot_1791571791.png" class="screenshot-thumb" alt="Live Bids Stream" />
+          <h4>Live Offers Stream</h4>
+          <p>60s countdown & single-tap actions</p>
+        </div>
+        <div class="gallery-card">
+          <img src="screenshots/Screenshot_1791571826.png" class="screenshot-thumb" alt="Financial Matrix" />
+          <h4>Financial Matrix</h4>
+          <p>10% fee split & disbursable balance</p>
+        </div>
+        <div class="gallery-card">
+          <img src="screenshots/Screenshot_1791571779.png" class="screenshot-thumb" alt="Room Inventory" />
+          <h4>Suite Inventory</h4>
+          <p>Live variants & nightly rate control</p>
+        </div>
+        <div class="gallery-card">
+          <img src="screenshots/Screenshot_1791571781.png" class="screenshot-thumb" alt="Configure Suite" />
+          <h4>Suite Configurator</h4>
+          <p>Multi-image upload & amenities</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: SCHEMA & ARCHITECTURE -->
+    <section id="tab-schema" class="tab-panel">
+      <div class="code-grid">
+        <div class="code-card">
+          <div class="code-header">
+            <span class="code-title">📄 supabase_schema_and_indexes.sql</span>
+            <span style="font-size: 0.75rem; color: #3ECF8E;">Sub-millisecond Optimizations</span>
+          </div>
+          <pre><code>-- Live Bids Incoming Offers Index
+CREATE INDEX IF NOT EXISTS idx_bids_hotel_status 
+ON public.bids (hotel_id, status);
+
+-- Financial Inner-Join Index
+CREATE INDEX IF NOT EXISTS idx_bookings_room_id 
+ON public.bookings (room_id);
+
+-- PostGIS Spatial GIST Index
+CREATE INDEX IF NOT EXISTS idx_hotels_location 
+ON public.hotels USING GIST (location);
+
+-- WebSocket Zero-Latency Row Identity
+ALTER TABLE public.bids REPLICA IDENTITY FULL;
+ALTER TABLE public.bookings REPLICA IDENTITY FULL;
+ALTER TABLE public.notifications REPLICA IDENTITY FULL;</code></pre>
+        </div>
+
+        <div class="code-card">
+          <div class="code-header">
+            <span class="code-title">🎯 Dart Realtime Stream Listener</span>
+            <span style="font-size: 0.75rem; color: var(--gold-primary);">lib/live_bids_tab.dart</span>
+          </div>
+          <pre><code>// Stream active bids directly for this hotel
+StreamBuilder&lt;List&lt;Map&lt;String, dynamic&gt;&gt;&gt;(
+  stream: Supabase.instance.client
+      .from('bids')
+      .stream(primaryKey: ['id'])
+      .eq('hotel_id', widget.currentHotelId),
+  builder: (context, snapshot) {
+    final liveBids = (snapshot.data ?? [])
+        .where((b) =&gt; b['status'] == 'pending')
+        .toList();
+
+    // Trigger physical haptic alert on new bid
+    if (liveBids.length &gt; _lastBidCount) {
+      HapticFeedback.vibrate();
+    }
+    return ListView.builder(...);
+  },
+)</code></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Part of the <strong>Negoo Hospitality Ecosystem</strong> • Maintained by <a href="https://github.com/Ghulam-Mohiuddin007" target="_blank">Ghulam Mohiuddin</a></p>
+  </footer>
+
+  <script>
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+      
+      const targetBtn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.getAttribute('onclick').includes(tabId));
+      if (targetBtn) targetBtn.classList.add('active');
+      
+      const targetPanel = document.getElementById('tab-' + tabId);
+      if (targetPanel) targetPanel.classList.add('active');
+    }
+
+    let countdownTimer = null;
+    let currentGross = 0;
+
+    function simulatePlaceBid() {
+      const guest = document.getElementById('sim-guest-name').value;
+      const offer = document.getElementById('sim-bid-amount').value;
+      
+      document.getElementById('sim-waiting-state').style.display = 'none';
+      const bidCard = document.getElementById('sim-live-bid');
+      bidCard.style.display = 'block';
+
+      document.getElementById('bid-card-guest').innerText = guest;
+      document.getElementById('bid-card-offer').innerText = 'PKR ' + Number(offer).toLocaleString();
+
+      let timeLeft = 60;
+      const timerLabel = document.getElementById('bid-timer-label');
+      const timerBar = document.getElementById('bid-timer-bar');
+
+      if (countdownTimer) clearInterval(countdownTimer);
+
+      countdownTimer = setInterval(() => {
+        timeLeft--;
+        timerLabel.innerText = timeLeft + 's left';
+        timerBar.style.width = (timeLeft / 60 * 100) + '%';
+
+        if (timeLeft <= 0) {
+          clearInterval(countdownTimer);
+          simulateDecision(false, true);
+        }
+      }, 1000);
+    }
+
+    function simulateDecision(accepted, expired = false) {
+      if (countdownTimer) clearInterval(countdownTimer);
+      const bidCard = document.getElementById('sim-live-bid');
+      bidCard.style.display = 'none';
+      document.getElementById('sim-waiting-state').style.display = 'block';
+
+      if (accepted) {
+        const offer = Number(document.getElementById('sim-bid-amount').value);
+        currentGross += offer;
+        const fee = currentGross * 0.10;
+        const net = currentGross - fee;
+
+        document.getElementById('ledger-gross').innerText = 'PKR ' + currentGross.toLocaleString();
+        document.getElementById('ledger-fee').innerText = '- PKR ' + fee.toLocaleString();
+        document.getElementById('ledger-net').innerText = 'PKR ' + net.toLocaleString();
+
+        alert('🎉 Offer Accepted! Deal secured in database, and traveler notified via WebSocket push.');
+      } else {
+        alert(expired ? '⏰ Offer expired automatically.' : 'Offer declined. Counter-status transmitted to traveler.');
+      }
+    }
+  </script>
+</body>
+</html>
