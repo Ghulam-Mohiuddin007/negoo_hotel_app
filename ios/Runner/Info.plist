@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Negoo Partner requires location access to set your hotel property coordinates and facilitate customer discovery.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Negoo Partner requires location access to pinpoint your hotel on the map.</string>
 </dict>
 </plist>

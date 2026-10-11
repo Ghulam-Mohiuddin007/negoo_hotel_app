@@ -1,30 +1,34 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:negoo_hotel_app/main.dart';
+import 'package:negoo_hotel_app/services/location_service.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('HotelLocationData Tests', () {
+    test('Correctly formats PostGIS WKT Point string', () {
+      const loc = HotelLocationData(
+        address: 'Pearl Continental, Mall Road',
+        city: 'Lahore',
+        latitude: 31.5580,
+        longitude: 74.3315,
+      );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+      expect(loc.toWktPoint(), 'POINT(74.3315 31.558)');
+      expect(loc.city, 'Lahore');
+      expect(loc.address, 'Pearl Continental, Mall Road');
+      expect(loc.latitude, 31.5580);
+      expect(loc.longitude, 74.3315);
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    test('Converts correctly to map', () {
+      const loc = HotelLocationData(
+        address: 'F-7 Markaz',
+        city: 'Islamabad',
+        latitude: 33.7215,
+        longitude: 73.0560,
+      );
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+      final map = loc.toMap();
+      expect(map['city'], 'Islamabad');
+      expect(map['location'], 'POINT(73.056 33.7215)');
+    });
   });
 }

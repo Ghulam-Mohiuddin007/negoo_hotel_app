@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:negoo_hotel_app/otp.dart';
+import 'package:negoo_hotel_app/services/location_service.dart';
+import 'package:negoo_hotel_app/widgets/location_picker_sheet.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 
@@ -21,8 +23,12 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
   final _hotelNameController = TextEditingController();
   final _licenseController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _cityController = TextEditingController();
 
+  HotelLocationData? _selectedLocation;
   bool _isLoading = false;
+  bool _isAutoFetchingLocation = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
@@ -34,11 +40,62 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
     _hotelNameController.dispose();
     _licenseController.dispose();
     _phoneController.dispose();
+    _addressController.dispose();
+    _cityController.dispose();
     super.dispose();
+  }
+
+  Future<void> _openLocationPicker() async {
+    final loc = await LocationPickerSheet.show(
+      context,
+      initialLocation: _selectedLocation,
+    );
+    if (loc != null && mounted) {
+      setState(() {
+        _selectedLocation = loc;
+        _addressController.text = loc.address;
+        _cityController.text = loc.city;
+      });
+    }
+  }
+
+  Future<void> _quickAutoFetchGps() async {
+    setState(() => _isAutoFetchingLocation = true);
+    try {
+      final loc = await LocationService().getCurrentLocationWithAddress();
+      if (loc != null && mounted) {
+        setState(() {
+          _selectedLocation = loc;
+          _addressController.text = loc.address;
+          _cityController.text = loc.city;
+        });
+        _showSnackBar(
+          "Auto-fetched hotel GPS coordinates & address! 📍",
+          const Color(0xFFD4AF37),
+        );
+      } else if (mounted) {
+        _showSnackBar(
+          "Could not auto-fetch GPS. Opening Maps search...",
+          Colors.orangeAccent,
+        );
+        _openLocationPicker();
+      }
+    } finally {
+      if (mounted) setState(() => _isAutoFetchingLocation = false);
+    }
   }
 
   Future<void> _submitRegistration() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_selectedLocation == null && _addressController.text.trim().isEmpty) {
+      _showSnackBar(
+        "Please specify your hotel location using Maps or auto-fetch.",
+        Colors.orangeAccent,
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -53,17 +110,28 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
       final String? userId = res.user?.id;
 
       if (userId != null) {
-        // STEP 2: Manually insert row into the hotels table matching your schema exactly
+        final locationData = _selectedLocation ??
+            HotelLocationData(
+              address: _addressController.text.trim(),
+              city: _cityController.text.trim().isNotEmpty
+                  ? _cityController.text.trim()
+                  : "Lahore",
+              latitude: 31.5204,
+              longitude: 74.3587,
+            );
+
+        // STEP 2: Insert row into the hotels table matching PostGIS schema
         await supabase.from('hotels').insert({
           'id': userId,
           'name': _hotelNameController.text.trim(),
           'hotel_name': _hotelNameController.text.trim(),
           'reg_no': _licenseController.text.trim(),
           'phone_number': _phoneController.text.trim(),
+          'address': locationData.address,
+          'city': locationData.city,
           'is_approved': false,
-          // Pass a raw WKT Point string instead of an Object Map
-          'location':
-              'POINT(73.1015 30.6777)', // Format: POINT(longitude latitude)
+          // PostGIS POINT(longitude latitude) format
+          'location': locationData.toWktPoint(),
         });
 
         if (!mounted) return;
@@ -83,7 +151,6 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
     } on AuthException catch (e) {
       _showSnackBar(e.message, Colors.redAccent);
     } on PostgrestException catch (e) {
-      // This will catch any specific database column/constraint mismatches directly
       _showSnackBar(
         "Database Configuration error: ${e.message}",
         Colors.redAccent,
@@ -125,17 +192,17 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
                     ),
                     physics: const BouncingScrollPhysics(),
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 450),
+                      constraints: const BoxConstraints(maxWidth: 480),
                       child: Form(
                         key: _formKey,
                         child: Column(
                           children: [
                             _buildHeader(),
-                            const SizedBox(height: 30),
+                            const SizedBox(height: 28),
                             _buildGlassCard(),
-                            const SizedBox(height: 30),
+                            const SizedBox(height: 28),
                             _buildSubmitButton(),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 20),
                             _buildLoginLink(),
                           ],
                         ),
@@ -171,7 +238,7 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          "Register your venue to start receiving live bids",
+          "Register your venue with live Google Maps geotagging",
           style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14),
           textAlign: TextAlign.center,
         ),
@@ -192,6 +259,7 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
             border: Border.all(color: Colors.white.withOpacity(0.06)),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildTextField(
                 controller: _hotelNameController,
@@ -206,7 +274,12 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
               ),
               const SizedBox(height: 18),
               _buildPhoneField(),
-              const SizedBox(height: 18),
+
+              const SizedBox(height: 20),
+              // Hotel Location Section
+              _buildLocationSection(),
+
+              const SizedBox(height: 20),
               _buildTextField(
                 controller: _emailController,
                 hint: "Business Email Address",
@@ -259,6 +332,200 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
     );
   }
 
+  /// Hotel Location & Google Maps Auto-fetch selector component
+  Widget _buildLocationSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141418),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _selectedLocation != null
+              ? const Color(0xFFD4AF37).withOpacity(0.3)
+              : Colors.white.withOpacity(0.05),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.location_on, color: Color(0xFFD4AF37), size: 18),
+                  SizedBox(width: 8),
+                  Text(
+                    "Hotel Venue Location",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+              if (_selectedLocation != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.greenAccent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    "GEO-TAGGED",
+                    style: TextStyle(
+                      color: Colors.greenAccent,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Auto-fetch coordinates using Google Maps or GPS satellite lock",
+            style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11),
+          ),
+          const SizedBox(height: 14),
+
+          // Action buttons: Search on Maps vs Quick GPS
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: OutlinedButton.icon(
+                  onPressed: _openLocationPicker,
+                  icon: const Icon(Icons.map_outlined, size: 16, color: Color(0xFFD4AF37)),
+                  label: Text(
+                    _selectedLocation != null ? "Change Pin" : "Search on Maps",
+                    style: const TextStyle(
+                      color: Color(0xFFD4AF37),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: const Color(0xFFD4AF37).withOpacity(0.4)),
+                    backgroundColor: const Color(0xFFD4AF37).withOpacity(0.04),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 4,
+                child: ElevatedButton.icon(
+                  onPressed: _isAutoFetchingLocation ? null : _quickAutoFetchGps,
+                  icon: _isAutoFetchingLocation
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                        )
+                      : const Icon(Icons.my_location, size: 16, color: Colors.black),
+                  label: Text(
+                    _isAutoFetchingLocation ? "Locating..." : "Auto-Fetch GPS",
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD4AF37),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // Display selected address and coordinates
+          if (_selectedLocation != null) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.02),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withOpacity(0.04)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.place, size: 14, color: Colors.white54),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _selectedLocation!.address,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD4AF37).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          _selectedLocation!.city,
+                          style: const TextStyle(
+                            color: Color(0xFFD4AF37),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "${_selectedLocation!.latitude.toStringAsFixed(4)}°, ${_selectedLocation!.longitude.toStringAsFixed(4)}°",
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.4),
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+            _buildTextField(
+              controller: _addressController,
+              hint: "Street Address or Commercial Landmark",
+              icon: Icons.edit_location_alt_outlined,
+            ),
+            const SizedBox(height: 10),
+            _buildTextField(
+              controller: _cityController,
+              hint: "City (e.g. Lahore, Islamabad)",
+              icon: Icons.location_city_outlined,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildPhoneField() {
     return IntlPhoneField(
       controller: _phoneController,
@@ -291,10 +558,8 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
       validator: (val) {
         if (val == null || val.isEmpty) return "Required field";
         if (isEmail && !val.contains("@")) return "Invalid business email";
-        if (isPassword && val.length < 6)
-          return "Security requires min 6 chars";
-        if (isConfirm && val != _passwordController.text)
-          return "Passwords mismatch";
+        if (isPassword && val.length < 6) return "Security requires min 6 chars";
+        if (isConfirm && val != _passwordController.text) return "Passwords mismatch";
         return null;
       },
     );
