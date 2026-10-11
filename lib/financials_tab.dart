@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:negoo_hotel_app/services/notification_service.dart';
+import 'package:negoo_hotel_app/services/toast_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class FinancialsTabScreen extends StatefulWidget {
@@ -12,6 +13,7 @@ class FinancialsTabScreen extends StatefulWidget {
 
 class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
   late final SupabaseClient _supabase;
+  RealtimeChannel? _bookingsChannel;
   bool _isActionLoading = false;
   String _hotelName = "Hotel Partner";
   String _activeFilter = 'all'; // 'all', 'pending', 'confirmed', 'unpaid_commission'
@@ -21,6 +23,36 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
     super.initState();
     _supabase = Supabase.instance.client;
     _fetchHotelName();
+    _subscribeToLiveBookings();
+  }
+
+  @override
+  void dispose() {
+    if (_bookingsChannel != null) {
+      _supabase.removeChannel(_bookingsChannel!);
+      _bookingsChannel = null;
+    }
+    super.dispose();
+  }
+
+  /// Realtime channel so incoming bookings immediately show up on the screen
+  void _subscribeToLiveBookings() {
+    try {
+      _bookingsChannel = _supabase
+          .channel('hotel_bookings_feed_${widget.userId}')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'bookings',
+            callback: (payload) {
+              debugPrint("⚡ Realtime booking change detected: ${payload.eventType}");
+              if (mounted) setState(() {});
+            },
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint("Realtime bookings subscription warning: $e");
+    }
   }
 
   Future<void> _fetchHotelName() async {
@@ -62,9 +94,8 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
           })
           .eq('id', bookingId);
 
-      // 2. If confirmed, notify the customer immediately via Supabase Realtime broadcast & notifications table
+      // 2. If confirmed, notify customer immediately via Realtime broadcast & notifications table
       if (targetStatus == 'confirmed' && customerUserId != null && customerUserId.isNotEmpty) {
-        // Send Realtime Broadcast directly to customer's personal channel
         await NotificationService().sendNotificationToUser(
           userId: customerUserId,
           title: "Booking Confirmed! 🎉",
@@ -143,7 +174,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
       if (!mounted) return;
       _showSnackBar(
         newSettled
-            ? "Negoo commission marked as Settled/Paid for this booking."
+            ? "Negoo commission marked as Settled for this booking."
             : "Negoo commission marked as Unpaid.",
         newSettled ? Colors.green.shade800 : const Color(0xFFD4AF37),
       );
@@ -156,14 +187,13 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
   }
 
   void _showSnackBar(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: const TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-    );
+    if (color == Colors.redAccent || color == Colors.red) {
+      ToastService.error(msg);
+    } else if (color == Colors.green || color == Colors.green.shade800) {
+      ToastService.success(msg);
+    } else {
+      ToastService.info(msg);
+    }
   }
 
   @override
@@ -266,7 +296,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
                         Text(
                           "Total Earnings • Negoo Commission • Unpaid Dues",
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.4),
+                            color: Colors.white.withValues(alpha: 0.4),
                             fontSize: 12,
                           ),
                         ),
@@ -302,7 +332,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      "Reservation Queue",
+                      "Reservation Management Queue",
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 18,
@@ -313,7 +343,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
                     Text(
                       "${filteredRecords.length} records",
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.4),
+                        color: Colors.white.withValues(alpha: 0.4),
                         fontSize: 12,
                       ),
                     ),
@@ -364,10 +394,10 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF121214),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
+            color: Colors.black.withValues(alpha: 0.4),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -409,13 +439,13 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: unpaidToNegoo > 0
-                        ? Colors.amber.withOpacity(0.08)
-                        : Colors.green.withOpacity(0.08),
+                        ? Colors.amber.withValues(alpha: 0.08)
+                        : Colors.green.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: unpaidToNegoo > 0
-                          ? Colors.amber.withOpacity(0.3)
-                          : Colors.green.withOpacity(0.3),
+                          ? Colors.amber.withValues(alpha: 0.3)
+                          : Colors.green.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Row(
@@ -445,7 +475,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
                               Text(
                                 unpaidToNegoo > 0 ? "Pending remittance to Negoo" : "All commissions settled",
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.4),
+                                  color: Colors.white.withValues(alpha: 0.4),
                                   fontSize: 10,
                                 ),
                               ),
@@ -472,9 +502,9 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
             decoration: BoxDecoration(
-              color: const Color(0xFFD4AF37).withOpacity(0.05),
+              color: const Color(0xFFD4AF37).withValues(alpha: 0.05),
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-              border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.1)),
+              border: Border.all(color: const Color(0xFFD4AF37).withValues(alpha: 0.1)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -493,7 +523,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
                     Text(
                       "Gross minus 10% platform fee",
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.3),
+                        color: Colors.white.withValues(alpha: 0.3),
                         fontSize: 10,
                       ),
                     ),
@@ -522,14 +552,14 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF16161A),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFFD4AF37).withOpacity(0.1),
+              color: const Color(0xFFD4AF37).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
@@ -557,7 +587,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
                       ? "$unpaidCount bookings pending commission payment of PKR ${unpaidAmount.toStringAsFixed(0)}"
                       : "Zero outstanding dues. All bookings settled cleanly.",
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.4),
+                    color: Colors.white.withValues(alpha: 0.4),
                     fontSize: 11,
                   ),
                 ),
@@ -619,7 +649,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
           border: Border.all(
             color: isSelected
                 ? const Color(0xFFD4AF37)
-                : (badgeColor?.withOpacity(0.3) ?? Colors.white.withOpacity(0.06)),
+                : (badgeColor?.withValues(alpha: 0.3) ?? Colors.white.withValues(alpha: 0.06)),
           ),
         ),
         child: Text(
@@ -634,41 +664,47 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
     );
   }
 
-  /// Booking row with Quick Confirm and Decline actions
+  /// Booking row with Clear Separation between Booking Details and Negoo Commission
   Widget _buildBookingItemRow(Map<String, dynamic> booking) {
     final roomData = booking['rooms'] as Map<String, dynamic>?;
     final String roomDesignation = roomData?['room_type'] ?? 'Standard Suite';
     final String status = booking['status'] ?? 'pending';
     final double price = double.tryParse(booking['total_price'].toString()) ?? 0.0;
     final double negooCut = price * 0.10;
+    final double hotelTakeHome = price - negooCut;
     final bool isCommissionSettled =
         booking['commission_paid'] == true || booking['commission_status'] == 'paid';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: const Color(0xFF121214),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: status == 'pending'
-              ? const Color(0xFFD4AF37).withOpacity(0.3)
-              : Colors.white.withOpacity(0.03),
+              ? const Color(0xFFD4AF37).withValues(alpha: 0.35)
+              : Colors.white.withValues(alpha: 0.04),
+          width: status == 'pending' ? 1.5 : 1,
         ),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         onTap: () => _displayBookingDetailsSheet(booking, roomDesignation),
         child: Padding(
           padding: const EdgeInsets.all(18.0),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ==========================================
+              // PART 1: GUEST & STAY OPERATIONAL DETAILS
+              // ==========================================
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.02),
+                      color: Colors.white.withValues(alpha: 0.03),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(
@@ -676,13 +712,13 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
                           ? Icons.check_circle_outline_rounded
                           : status == 'rejected'
                               ? Icons.remove_circle_outline_rounded
-                              : Icons.pending_actions_rounded,
+                              : Icons.notification_important_rounded,
                       color: status == 'confirmed'
                           ? Colors.greenAccent
                           : status == 'rejected'
                               ? Colors.redAccent
                               : const Color(0xFFD4AF37),
-                      size: 22,
+                      size: 24,
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -690,86 +726,209 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          booking['full_name'] ?? 'Guest Traveler',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color: Colors.white,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              booking['full_name'] ?? 'Guest Traveler',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildStatusBadge(status),
+                          ],
                         ),
                         const SizedBox(height: 4),
                         Text(
                           roomDesignation,
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.4),
+                            color: const Color(0xFFD4AF37).withValues(alpha: 0.9),
                             fontSize: 13,
-                            overflow: TextOverflow.ellipsis,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        // Commission badge for confirmed bookings
-                        if (status == 'confirmed')
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: isCommissionSettled
-                                  ? Colors.green.withOpacity(0.1)
-                                  : Colors.orange.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              isCommissionSettled
-                                  ? "Negoo Fee (PKR ${negooCut.toStringAsFixed(0)}): Settled"
-                                  : "Negoo Fee (PKR ${negooCut.toStringAsFixed(0)}): Unpaid",
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.calendar_today_outlined, size: 12, color: Colors.white.withValues(alpha: 0.4)),
+                            const SizedBox(width: 4),
+                            Text(
+                              "${booking['stay_from'] ?? 'N/A'} - ${booking['stay_to'] ?? 'N/A'}",
                               style: TextStyle(
-                                color: isCommissionSettled ? Colors.greenAccent : Colors.orangeAccent,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
+                                color: Colors.white.withValues(alpha: 0.4),
+                                fontSize: 12,
                               ),
                             ),
-                          ),
+                            const SizedBox(width: 10),
+                            Icon(Icons.person_outline, size: 12, color: Colors.white.withValues(alpha: 0.4)),
+                            const SizedBox(width: 4),
+                            Text(
+                              "${booking['guest_count'] ?? 1} Guests",
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.4),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        "PKR ${booking['total_price']}",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      _buildStatusBadge(status),
-                    ],
                   ),
                 ],
               ),
 
-              // Quick Action Buttons if pending
+              const SizedBox(height: 14),
+
+              // ==========================================
+              // PART 2: NEGOO COMMISSION & FINANCIAL MATRIX
+              // (Visually separated into its own distinct container)
+              // ==========================================
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16161B),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFFD4AF37).withValues(alpha: 0.15),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.account_balance_wallet_outlined,
+                              size: 14,
+                              color: Colors.white.withValues(alpha: 0.5),
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              "Gross Guest Payout",
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          "PKR ${price.toStringAsFixed(0)}",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.pie_chart_outline,
+                              size: 14,
+                              color: Colors.redAccent.withValues(alpha: 0.7),
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              "Negoo Commission (10%)",
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          "- PKR ${negooCut.toStringAsFixed(0)}",
+                          style: TextStyle(
+                            color: Colors.redAccent.shade100,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 6),
+                      child: Divider(color: Colors.white10, height: 1),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Hotel Net Retained",
+                          style: TextStyle(
+                            color: Color(0xFFD4AF37),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Text(
+                              "PKR ${hotelTakeHome.toStringAsFixed(0)}",
+                              style: const TextStyle(
+                                color: Color(0xFFD4AF37),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isCommissionSettled
+                                    ? Colors.green.withValues(alpha: 0.15)
+                                    : Colors.orange.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                isCommissionSettled ? "FEE SETTLED" : "FEE UNPAID",
+                                style: TextStyle(
+                                  color: isCommissionSettled ? Colors.greenAccent : Colors.orangeAccent,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // ==========================================
+              // PART 3: CONFIRMATION ACTION BUTTONS
+              // ==========================================
               if (status == 'pending') ...[
                 const SizedBox(height: 14),
-                const Divider(color: Colors.white10, height: 1),
-                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
+                      flex: 1,
                       child: OutlinedButton(
                         onPressed: _isActionLoading
                             ? null
                             : () => _updateBookingStatus(booking, 'rejected'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.redAccent,
-                          side: BorderSide(color: Colors.redAccent.withOpacity(0.4)),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.4)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: const Text("Decline", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        child: const Text("DECLINE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -779,16 +938,16 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
                         onPressed: _isActionLoading
                             ? null
                             : () => _updateBookingStatus(booking, 'confirmed'),
-                        icon: const Icon(Icons.check, size: 16),
+                        icon: const Icon(Icons.check_circle_rounded, size: 16),
                         label: const Text(
                           "CONFIRM BOOKING",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.3),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFD4AF37),
                           foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           elevation: 0,
                         ),
                       ),
@@ -803,7 +962,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
     );
   }
 
-  /// Full Booking Details Sheet with Confirm action and customer notification
+  /// Full Booking Details Sheet with explicit visual separation between Guest Details & Negoo Commission
   void _displayBookingDetailsSheet(
     Map<String, dynamic> booking,
     String roomType,
@@ -825,217 +984,295 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
           padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Reservation Sheet",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  _buildStatusBadge(currentStatus),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              _buildDetailInvoiceRow(
-                Icons.person_outline_rounded,
-                "Lead Guest",
-                booking['full_name'] ?? 'N/A',
-              ),
-              _buildDetailInvoiceRow(
-                Icons.phone_enabled_outlined,
-                "Contact Number",
-                booking['phone'] ?? 'N/A',
-              ),
-              _buildDetailInvoiceRow(
-                Icons.badge_outlined,
-                "National CNIC",
-                booking['cnic'] ?? 'N/A',
-              ),
-              _buildDetailInvoiceRow(
-                Icons.meeting_room_outlined,
-                "Suite Type",
-                roomType,
-              ),
-              _buildDetailInvoiceRow(
-                Icons.people_outline_rounded,
-                "Guests Count",
-                "${booking['guest_count'] ?? 1} Persons",
-              ),
-              _buildDetailInvoiceRow(
-                Icons.date_range_outlined,
-                "Stay Duration",
-                "${booking['stay_from']} to ${booking['stay_to']}",
-              ),
-              _buildDetailInvoiceRow(
-                Icons.payment_rounded,
-                "Payment Method",
-                (booking['payment_method'] ?? 'cash at hotel').toString().toUpperCase(),
-              ),
-
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Divider(color: Colors.white10),
-              ),
-
-              // Financial breakdown for this booking
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.02),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withOpacity(0.04)),
                 ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Gross Booking Price", style: TextStyle(color: Colors.white70, fontSize: 13)),
-                        Text("PKR ${price.toStringAsFixed(0)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Negoo Marketplace Fee (10%)", style: TextStyle(color: Colors.white54, fontSize: 13)),
-                        Text("- PKR ${negooFee.toStringAsFixed(0)}", style: TextStyle(color: Colors.redAccent.shade100, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Hotel Net Retained", style: TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text("PKR ${hotelNet.toStringAsFixed(0)}", style: const TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.bold, fontSize: 15)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+                const SizedBox(height: 20),
 
-              // Commission settlement toggle if confirmed
-              if (currentStatus == 'confirmed') ...[
-                const SizedBox(height: 12),
+                // Sheet Header
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      isCommissionSettled
-                          ? "Negoo Fee Status: Settled"
-                          : "Negoo Fee Status: Unpaid",
+                    const Text(
+                      "Reservation Sheet",
                       style: TextStyle(
-                        color: isCommissionSettled ? Colors.greenAccent : Colors.orangeAccent,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                    TextButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _toggleCommissionSettled(booking);
-                      },
-                      icon: Icon(
-                        isCommissionSettled ? Icons.undo : Icons.check_circle_outline,
-                        size: 16,
-                        color: const Color(0xFFD4AF37),
-                      ),
-                      label: Text(
-                        isCommissionSettled ? "Mark as Unpaid" : "Mark Commission Paid",
-                        style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 12),
-                      ),
-                    ),
+                    _buildStatusBadge(currentStatus),
                   ],
                 ),
-              ],
+                const SizedBox(height: 20),
 
-              const SizedBox(height: 24),
-
-              if (currentStatus == 'pending')
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _isActionLoading
-                            ? null
-                            : () => _updateBookingStatus(
-                                  booking,
-                                  'rejected',
-                                  closeDetailSheet: true,
-                                ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.redAccent,
-                          side: const BorderSide(color: Colors.redAccent),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
-                        child: const Text("DECLINE OFFER", style: TextStyle(fontWeight: FontWeight.bold)),
+                // ==============================================================
+                // SECTION 1: GUEST & STAY RESERVATION DETAILS (SEPARATE CARD)
+                // ==============================================================
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.02),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.person_pin_circle_outlined, color: Color(0xFFD4AF37), size: 18),
+                          const SizedBox(width: 8),
+                          const Text(
+                            "GUEST & STAY DETAILS",
+                            style: TextStyle(
+                              color: Color(0xFFD4AF37),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _isActionLoading
-                            ? null
-                            : () => _updateBookingStatus(
-                                  booking,
-                                  'confirmed',
-                                  closeDetailSheet: true,
-                                ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFD4AF37),
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: 0,
-                        ),
-                        child: _isActionLoading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                              )
-                            : const Text("CONFIRM BOOKING", style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 14),
+                      _buildDetailInvoiceRow(
+                        Icons.person_outline_rounded,
+                        "Lead Guest",
+                        booking['full_name'] ?? 'N/A',
                       ),
-                    ),
-                  ],
-                )
-              else
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: OutlinedButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_back, size: 16, color: Colors.white54),
-                    label: const Text("CLOSE LEDGER", style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.white12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
+                      _buildDetailInvoiceRow(
+                        Icons.phone_enabled_outlined,
+                        "Contact Number",
+                        booking['phone'] ?? 'N/A',
+                      ),
+                      _buildDetailInvoiceRow(
+                        Icons.badge_outlined,
+                        "National CNIC Identifier",
+                        booking['cnic'] ?? 'N/A',
+                      ),
+                      _buildDetailInvoiceRow(
+                        Icons.meeting_room_outlined,
+                        "Allocated Suite Designation",
+                        roomType,
+                      ),
+                      _buildDetailInvoiceRow(
+                        Icons.people_outline_rounded,
+                        "Guests Count",
+                        "${booking['guest_count'] ?? 1} Persons",
+                      ),
+                      _buildDetailInvoiceRow(
+                        Icons.date_range_outlined,
+                        "Stay Duration Timeline",
+                        "${booking['stay_from']} to ${booking['stay_to']}",
+                      ),
+                      _buildDetailInvoiceRow(
+                        Icons.payment_rounded,
+                        "Payment Method",
+                        (booking['payment_method'] ?? 'cash at hotel').toString().toUpperCase(),
+                      ),
+                    ],
                   ),
                 ),
-              const SizedBox(height: 16),
-            ],
+
+                const SizedBox(height: 16),
+
+                // ==============================================================
+                // SECTION 2: NEGOO COMMISSION & FINANCIAL MATRIX (SEPARATE CARD)
+                // ==============================================================
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16161C),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: const Color(0xFFD4AF37).withValues(alpha: 0.25),
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.account_balance_outlined, color: Color(0xFFD4AF37), size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                "NEGOO COMMISSION STATEMENT",
+                                style: TextStyle(
+                                  color: Color(0xFFD4AF37),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isCommissionSettled
+                                  ? Colors.green.withValues(alpha: 0.15)
+                                  : Colors.orange.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              isCommissionSettled ? "SETTLED" : "UNPAID TO NEGOO",
+                              style: TextStyle(
+                                color: isCommissionSettled ? Colors.greenAccent : Colors.orangeAccent,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Financial figures
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("Gross Guest Payment", style: TextStyle(color: Colors.white70, fontSize: 13)),
+                          Text("PKR ${price.toStringAsFixed(0)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("Negoo Marketplace Fee (10%)", style: TextStyle(color: Colors.white54, fontSize: 13)),
+                          Text("- PKR ${negooFee.toStringAsFixed(0)}", style: TextStyle(color: Colors.redAccent.shade100, fontWeight: FontWeight.bold, fontSize: 14)),
+                        ],
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Divider(color: Colors.white10),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("Hotel Net Disbursable", style: TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.bold, fontSize: 14)),
+                          Text("PKR ${hotelNet.toStringAsFixed(0)}", style: const TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.w900, fontSize: 18)),
+                        ],
+                      ),
+
+                      if (currentStatus == 'confirmed') ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "Ref: NEG-HTL-${booking['id'].toString().length >= 6 ? booking['id'].toString().substring(0, 6).toUpperCase() : 'BOOKING'}",
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 11),
+                            ),
+                            TextButton.icon(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _toggleCommissionSettled(booking);
+                              },
+                              icon: Icon(
+                                isCommissionSettled ? Icons.undo : Icons.check_circle_outline,
+                                size: 14,
+                                color: const Color(0xFFD4AF37),
+                              ),
+                              label: Text(
+                                isCommissionSettled ? "Mark as Unpaid" : "Mark Commission Paid",
+                                style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 11),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // ==============================================================
+                // SECTION 3: HOTEL CONFIRMATION ACTION CONTROLS
+                // ==============================================================
+                if (currentStatus == 'pending')
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _isActionLoading
+                              ? null
+                              : () => _updateBookingStatus(
+                                    booking,
+                                    'rejected',
+                                    closeDetailSheet: true,
+                                  ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.redAccent,
+                            side: const BorderSide(color: Colors.redAccent),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                          child: const Text("DECLINE OFFER", style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _isActionLoading
+                              ? null
+                              : () => _updateBookingStatus(
+                                    booking,
+                                    'confirmed',
+                                    closeDetailSheet: true,
+                                  ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFD4AF37),
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            elevation: 0,
+                          ),
+                          child: _isActionLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                                )
+                              : const Text("CONFIRM BOOKING", style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.arrow_back, size: 16, color: Colors.white54),
+                      label: const Text("CLOSE LEDGER", style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.white12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
       ),
@@ -1075,7 +1312,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: unpaidDues > 0 ? Colors.amber.withOpacity(0.15) : Colors.green.withOpacity(0.15),
+                    color: unpaidDues > 0 ? Colors.amber.withValues(alpha: 0.15) : Colors.green.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -1092,7 +1329,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
             const SizedBox(height: 6),
             Text(
               "Negoo platform fee is 10% on confirmed bookings collected from direct guest payments.",
-              style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 12),
             ),
             const SizedBox(height: 20),
 
@@ -1102,7 +1339,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFF16161A),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.2)),
+                border: Border.all(color: const Color(0xFFD4AF37).withValues(alpha: 0.2)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1164,11 +1401,11 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
 
   Widget _buildDetailInvoiceRow(IconData icon, String header, String coreValue) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14.0),
+      padding: const EdgeInsets.only(bottom: 12.0),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: const Color(0xFFD4AF37).withOpacity(0.7)),
-          const SizedBox(width: 14),
+          Icon(icon, size: 16, color: const Color(0xFFD4AF37).withValues(alpha: 0.7)),
+          const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1176,7 +1413,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
                 header,
                 style: const TextStyle(
                   color: Colors.white38,
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 0.5,
                 ),
@@ -1186,7 +1423,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
                 coreValue,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1217,9 +1454,9 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: badgeColor.withOpacity(0.08),
+        color: badgeColor.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: badgeColor.withOpacity(0.2)),
+        border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
       ),
       child: Text(
         label,
@@ -1244,12 +1481,12 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFFD4AF37).withOpacity(0.02),
+                color: const Color(0xFFD4AF37).withValues(alpha: 0.02),
               ),
               child: Icon(
                 Icons.account_balance_wallet_outlined,
                 size: 44,
-                color: const Color(0xFFD4AF37).withOpacity(0.3),
+                color: const Color(0xFFD4AF37).withValues(alpha: 0.3),
               ),
             ),
             const SizedBox(height: 20),
@@ -1267,7 +1504,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
               "Incoming reservations, confirmed earnings, and Negoo fee splits will populate in this queue.",
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.3),
+                color: Colors.white.withValues(alpha: 0.3),
                 fontSize: 12,
                 height: 1.5,
               ),

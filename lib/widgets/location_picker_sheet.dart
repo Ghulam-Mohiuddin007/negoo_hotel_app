@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:negoo_hotel_app/services/location_service.dart';
+import 'package:negoo_hotel_app/services/toast_service.dart';
 
 class LocationPickerSheet extends StatefulWidget {
   final HotelLocationData? initialLocation;
@@ -82,21 +83,9 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
           _searchController.text = loc.address;
           _suggestions = [];
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Auto-fetched high-precision GPS coordinates!"),
-            backgroundColor: Color(0xFFD4AF37),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ToastService.success("Auto-fetched high-precision GPS coordinates!");
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Unable to detect device location. Check permissions."),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ToastService.error("Unable to detect device location. Check permissions.");
       }
     } finally {
       if (mounted) setState(() => _isLocatingGps = false);

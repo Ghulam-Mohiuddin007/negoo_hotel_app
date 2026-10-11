@@ -1,4 +1,5 @@
 import 'package:negoo_hotel_app/services/notification_service.dart';
+import 'package:negoo_hotel_app/services/toast_service.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -214,7 +215,7 @@ class _BidTimerCardState extends State<BidTimerCard> {
       if (widget.bidData['user_id'] != null) {
         NotificationService().sendNotificationToUser(
           userId: widget.bidData['user_id'].toString(),
-          title: approveAllocation ? "Deal Secured! ??" : "Offer Declined ?",
+          title: approveAllocation ? "Deal Secured! 🎉" : "Offer Declined ❌",
           body: approveAllocation
               ? "The hotel accepted your rate match proposal (PKR ${widget.bidData['bid_amount']})!"
               : "The hotel passed on your proposed rate of PKR ${widget.bidData['bid_amount']}.",
@@ -225,18 +226,10 @@ class _BidTimerCardState extends State<BidTimerCard> {
         );
       }
       
-      // Let the SnackBar notification handle feedback
-      final String msg = approveAllocation ? "Bid accepted!" : "Bid declined.";
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFF141416),
-            content: Text(
-              msg,
-              style: TextStyle(color: approveAllocation ? Colors.greenAccent : Colors.redAccent),
-            ),
-          ),
-        );
+      if (approveAllocation) {
+        ToastService.success("Bid accepted!");
+      } else {
+        ToastService.info("Bid declined.");
       }
     } catch (e) {
       debugPrint("Status transmission failed: $e");

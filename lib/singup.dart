@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:negoo_hotel_app/otp.dart';
 import 'package:negoo_hotel_app/services/location_service.dart';
+import 'package:negoo_hotel_app/services/toast_service.dart';
 import 'package:negoo_hotel_app/widgets/location_picker_sheet.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
@@ -164,14 +165,13 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
   }
 
   void _showSnackBar(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: const TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    if (color == Colors.redAccent || color == Colors.red) {
+      ToastService.error(msg);
+    } else if (color == Colors.green) {
+      ToastService.success(msg);
+    } else {
+      ToastService.info(msg);
+    }
   }
 
   @override

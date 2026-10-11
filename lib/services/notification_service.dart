@@ -1,6 +1,9 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:negoo_hotel_app/services/background_service.dart';
+import 'package:negoo_hotel_app/services/toast_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Declare a global key to allow showing SnackBars or routing from the service without context
@@ -17,15 +20,54 @@ class NotificationService {
   RealtimeChannel? _hotelChannel;
   bool _isInitialized = false;
 
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
+
   Future<void> initialize() async {
     if (_isInitialized) return;
+
+    // 1. Initialize Flutter Local Notifications for OS-level heads-up alerts
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const DarwinInitializationSettings initializationSettingsDarwin =
+        DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+    const InitializationSettings initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: initializationSettingsDarwin,
+    );
+
+    await _localNotifications.initialize(
+      settings: initializationSettings,
+    );
+
+    // Request permissions on Android 13+
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
+
+    // 2. Initialize Background Service for notifications when app is closed
+    try {
+      await NegooBackgroundService.initialize();
+      debugPrint("🚀 Negoo Background Service Initialized");
+    } catch (e) {
+      debugPrint("Background Service Init warning: $e");
+    }
+
     _isInitialized = true;
-    debugPrint("🔔 Hotel Supabase Realtime Notification Service Initialized");
+    debugPrint("🔔 Hotel Supabase Realtime & Background Notification Service Initialized");
   }
 
   /// Subscribe to hotel-specific channel and database changes
   Future<void> subscribeToHotelTopic(String hotelId) async {
     try {
+      // Register active hotel ID with the background service
+      await NegooBackgroundService.setHotelId(hotelId);
+
       if (_hotelChannel != null) {
         await _supabase.removeChannel(_hotelChannel!);
         _hotelChannel = null;
@@ -41,7 +83,7 @@ class NotificationService {
           debugPrint("📩 Realtime hotel notification received: $payload");
           final title = payload['title']?.toString() ?? "New Live Pitch! ⚡";
           final body = payload['body']?.toString() ?? "";
-          _showInAppNotification(title: title, body: body, payload: payload);
+          _triggerFullNotification(title: title, body: body, payload: payload);
         },
       );
 
@@ -58,29 +100,11 @@ class NotificationService {
         callback: (payload) {
           final newRecord = payload.newRecord;
           final amount = newRecord['bid_amount']?.toString() ?? 'N/A';
-          _showInAppNotification(
+          _triggerFullNotification(
             title: "New Live Pitch! ⚡",
             body: "A guest offered PKR $amount for a room reservation.",
             payload: newRecord,
           );
-        },
-      );
-
-      // 3. Listen for Postgres inserts on notifications table if present
-      channel.onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'notifications',
-        filter: PostgresChangeFilter(
-          type: PostgresChangeFilterType.eq,
-          column: 'hotel_id',
-          value: hotelId,
-        ),
-        callback: (payload) {
-          final newRecord = payload.newRecord;
-          final title = newRecord['title']?.toString() ?? "Hotel Notification";
-          final body = newRecord['body']?.toString() ?? "";
-          _showInAppNotification(title: title, body: body, payload: newRecord);
         },
       );
 
@@ -101,6 +125,7 @@ class NotificationService {
   /// Unsubscribe from hotel-specific channel
   Future<void> unsubscribeFromHotelTopic(String hotelId) async {
     try {
+      await NegooBackgroundService.clearHotelId();
       if (_hotelChannel != null) {
         await _supabase.removeChannel(_hotelChannel!);
         _hotelChannel = null;
@@ -150,6 +175,57 @@ class NotificationService {
     }
   }
 
+  /// Triggers both in-app SnackBar and OS-level system notification
+  void _triggerFullNotification({
+    required String title,
+    required String body,
+    Map<String, dynamic>? payload,
+  }) {
+    // 1. Show OS system tray notification
+    _showOsSystemNotification(title: title, body: body);
+
+    // 2. Show in-app banner
+    _showInAppNotification(title: title, body: body, payload: payload);
+  }
+
+  Future<void> _showOsSystemNotification({
+    required String title,
+    required String body,
+  }) async {
+    try {
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        notificationChannelId,
+        'Negoo Live Bids & Bookings',
+        channelDescription: 'Real-time notifications for live bids and bookings',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+        styleInformation: BigTextStyleInformation(''),
+      );
+
+      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      const NotificationDetails notificationDetails = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      await _localNotifications.show(
+        id: DateTime.now().millisecond,
+        title: title,
+        body: body,
+        notificationDetails: notificationDetails,
+      );
+    } catch (e) {
+      debugPrint("OS notification display error: $e");
+    }
+  }
+
   /// Displays a premium custom in-app notification SnackBar
   void _showInAppNotification({
     required String title,
@@ -157,65 +233,6 @@ class NotificationService {
     Map<String, dynamic>? payload,
   }) {
     HapticFeedback.heavyImpact();
-
-    const Color accentColor = Color(0xFFD4AF37); // Gold
-    const IconData icon = Icons.gavel_rounded;
-
-    final snackBar = SnackBar(
-      elevation: 6,
-      behavior: SnackBarBehavior.floating,
-      backgroundColor: const Color(0xFF121214),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: accentColor.withValues(alpha: 0.3),
-          width: 1.5,
-        ),
-      ),
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      duration: const Duration(seconds: 8),
-      content: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(icon, color: accentColor, size: 24),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-                if (body.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    body,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-
-    rootScaffoldMessengerKey.currentState?.showSnackBar(snackBar);
+    ToastService.info("$title\n$body");
   }
 }

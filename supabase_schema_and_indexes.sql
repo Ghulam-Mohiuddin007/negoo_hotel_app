@@ -322,3 +322,52 @@ BEGIN
       AND expires_at < now();
 END;
 $$;
+
+-- ------------------------------------------------------------------------------
+-- 7. GUEST ARCHIVE TABLE & PERFORMANCE INDEXES FOR FRONT DESK CHECK-OUT
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.guest_archive (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    booking_id TEXT NOT NULL,
+    hotel_id UUID,
+    user_id UUID,
+    full_name TEXT,
+    phone TEXT,
+    cnic TEXT,
+    room_type TEXT,
+    total_price NUMERIC,
+    stay_from TEXT,
+    stay_to TEXT,
+    payment_method TEXT,
+    payment_status TEXT DEFAULT 'paid',
+    checked_in_at TIMESTAMPTZ,
+    checked_out_at TIMESTAMPTZ,
+    archived_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Fast indexing for instant customer retrieval by phone, cnic, booking id, and hotel
+CREATE INDEX IF NOT EXISTS idx_guest_archive_hotel_id ON public.guest_archive (hotel_id);
+CREATE INDEX IF NOT EXISTS idx_guest_archive_booking_id ON public.guest_archive (booking_id);
+CREATE INDEX IF NOT EXISTS idx_guest_archive_phone ON public.guest_archive (phone);
+CREATE INDEX IF NOT EXISTS idx_guest_archive_cnic ON public.guest_archive (cnic);
+
+-- Performance Indexes on bookings for Front Desk quick-search
+CREATE INDEX IF NOT EXISTS idx_bookings_phone ON public.bookings (phone);
+CREATE INDEX IF NOT EXISTS idx_bookings_cnic ON public.bookings (cnic);
+
+-- ------------------------------------------------------------------------------
+-- 8. NEGOO COMMISSION SETTLEMENT & SUPERADMIN GOVERNANCE SCHEMA
+-- ------------------------------------------------------------------------------
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS commission_paid BOOLEAN DEFAULT false;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS commission_status TEXT DEFAULT 'unpaid';
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS commission_settled_at TIMESTAMPTZ;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS commission_verified_by TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS remittance_ref TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS remittance_status TEXT DEFAULT 'pending_superadmin_verification';
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS remittance_submitted_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_bookings_commission_status ON public.bookings (commission_status);
+CREATE INDEX IF NOT EXISTS idx_bookings_commission_paid ON public.bookings (commission_paid);
+CREATE INDEX IF NOT EXISTS idx_bookings_remittance_ref ON public.bookings (remittance_ref);
+
+

@@ -26,6 +26,8 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -35,6 +37,7 @@ class MyApp extends StatelessWidget {
     final Session? activeSession = supabaseClient.auth.currentSession;
 
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       scaffoldMessengerKey: rootScaffoldMessengerKey,
       debugShowCheckedModeBanner: false,
       title: 'Negoo Partner Console',

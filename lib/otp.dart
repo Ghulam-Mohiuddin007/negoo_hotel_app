@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:negoo_hotel_app/services/toast_service.dart';
 import 'package:negoo_hotel_app/verification.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -55,13 +56,11 @@ class _HotelOtpScreenState extends State<HotelOtpScreen> {
   }
 
   void _showSnackBar(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (color == Colors.redAccent || color == Colors.red) {
+      ToastService.error(msg);
+    } else {
+      ToastService.info(msg);
+    }
   }
 
   @override

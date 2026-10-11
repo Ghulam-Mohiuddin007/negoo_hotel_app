@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:negoo_hotel_app/services/toast_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class RoomsTabScreen extends StatefulWidget {
@@ -194,15 +195,15 @@ class _RoomsTabScreenState extends State<RoomsTabScreen> {
   }
 
   void _showSnackBar(String msg, Color color) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: const TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    if (color == Colors.redAccent || color == Colors.red) {
+      ToastService.error(msg);
+    } else if (color == Colors.orangeAccent || color == Colors.amber) {
+      ToastService.warning(msg);
+    } else if (color == Colors.green) {
+      ToastService.success(msg);
+    } else {
+      ToastService.info(msg);
+    }
   }
 
   @override
