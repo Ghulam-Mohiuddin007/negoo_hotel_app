@@ -371,8 +371,8 @@ class _HotelVerificationScreenState extends State<HotelVerificationScreen> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isReady
-                ? Colors.green.withOpacity(0.4)
-                : Colors.white.withOpacity(0.04),
+                ? Colors.green.withValues(alpha: 0.4)
+                : Colors.white.withValues(alpha: 0.04),
           ),
         ),
         child: Row(
@@ -436,7 +436,7 @@ class _HotelVerificationScreenState extends State<HotelVerificationScreen> {
               "Compressing and uploading credentials safely to our encrypted servers. Please do not close the screen application layout.",
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.3),
+                color: Colors.white.withValues(alpha: 0.3),
                 fontSize: 12,
                 height: 1.4,
               ),

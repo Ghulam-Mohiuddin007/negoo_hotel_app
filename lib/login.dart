@@ -1,11 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:negoo_hotel_app/pending.dart';
+import 'package:negoo_hotel_app/services/redis_cache_service.dart';
 import 'package:negoo_hotel_app/services/toast_service.dart';
-import 'package:negoo_hotel_app/singup.dart'; // Fixed your relative import name spelling
+import 'package:negoo_hotel_app/singup.dart';
 import 'package:negoo_hotel_app/verification.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-// Import your document collection screen
 
 class HotelLoginScreen extends StatefulWidget {
   const HotelLoginScreen({super.key});
@@ -45,76 +45,67 @@ class _HotelLoginScreenState extends State<HotelLoginScreen> {
       final String? userId = response.user?.id;
 
       if (userId != null) {
-        // Query your hotels table to check validation status
+        // Query hotels table with complete approval & verification metadata
         final hotelRecord = await supabase
             .from('hotels')
-            .select('is_approved, hotel_name, name')
+            .select('is_approved, hotel_name, name, owner_cnic_url')
             .eq('id', userId)
             .maybeSingle();
 
         if (!mounted) return;
 
         if (hotelRecord != null) {
+          // Cache in Redis for instant 0ms retrieval on subsequent visits
+          await RedisCacheService().cacheHotelProfile(userId, hotelRecord);
+          if (!mounted) return;
+
           final bool isApproved = hotelRecord['is_approved'] ?? false;
           final String verifiedName =
               hotelRecord['hotel_name'] ?? hotelRecord['name'] ?? 'Partner';
+          final String? uploadedCnic = hotelRecord['owner_cnic_url'];
 
-// removed
-// removed
-// removed
-// removed
-
-            // Grab checking markers to see if they've completed onboarding documentation tasks
-            final String? uploadedCnic = hotelRecord['owner_cnic_url'];
-
-            if (!mounted) return;
-
-            if (isApproved) {
-              _showSnackBar("Welcome back, $verifiedName!", Colors.green);
-              Navigator.pushReplacementNamed(context, '/hotel_main_dashboard');
-            } else if (uploadedCnic != null && uploadedCnic.isNotEmpty) {
-              // STATE 2: They finished uploading everything, they are just waiting for Super Admin approval
-              _showSnackBar(
-                "Account under review. Tracking approval pipeline...",
-                const Color(0xFFD4AF37),
-              );
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (c) => HotelPendingScreen(
-                    userId: userId,
-                    hotelName: verifiedName,
-                  ),
+          if (isApproved) {
+            _showSnackBar("Welcome back, $verifiedName!", Colors.green);
+            Navigator.pushReplacementNamed(context, '/hotel_main_dashboard');
+          } else if (uploadedCnic != null && uploadedCnic.isNotEmpty) {
+            // STATE 2: Completed onboarding docs, awaiting Super Admin approval
+            _showSnackBar(
+              "Account under review. Tracking approval pipeline...",
+              const Color(0xFFD4AF37),
+            );
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (c) => HotelPendingScreen(
+                  userId: userId,
+                  hotelName: verifiedName,
                 ),
-              );
-            } else {
-              // STATE 3: Entirely fresh signup profile or incomplete compliance files
-              _showSnackBar(
-                "Please complete your identity and compliance profile onboarding.",
-                const Color(0xFFD4AF37),
-              );
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (c) => HotelVerificationScreen(
-                    userId: userId,
-                    hotelName: verifiedName,
-                  ),
+              ),
+            );
+          } else {
+            // STATE 3: Fresh signup profile or incomplete compliance files
+            _showSnackBar(
+              "Please complete your identity and compliance profile onboarding.",
+              const Color(0xFFD4AF37),
+            );
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (c) => HotelVerificationScreen(
+                  userId: userId,
+                  hotelName: verifiedName,
                 ),
-              );
-// removed
+              ),
+            );
           }
+        } else {
+          _showSnackBar("No active hotel partner profile found.", Colors.orange);
         }
       }
     } on AuthException catch (e) {
-      // Handles native credential errors (e.g., wrong password, user not found)
       _showSnackBar(e.message, Colors.redAccent);
     } catch (e) {
-      _showSnackBar(
-        "An unexpected error occurred during access routing.",
-        Colors.redAccent,
-      );
-      debugPrint("Authentication Exception Error Log: $e");
+      _showSnackBar("Authentication process halted: $e", Colors.redAccent);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -142,23 +133,20 @@ class _HotelLoginScreenState extends State<HotelLoginScreen> {
               SafeArea(
                 child: Center(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    physics: const BouncingScrollPhysics(),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 450),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          children: [
-                            _buildHeader(),
-                            const SizedBox(height: 40),
-                            _buildGlassCard(),
-                            const SizedBox(height: 30),
-                            _buildSubmitButton(),
-                            const SizedBox(height: 24),
-                            _buildSignupLink(),
-                          ],
-                        ),
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildBrandHeader(),
+                          const SizedBox(height: 40),
+                          _buildGlassCard(),
+                          const SizedBox(height: 32),
+                          _buildSubmitButton(),
+                          const SizedBox(height: 24),
+                          _buildSignupLink(),
+                        ],
                       ),
                     ),
                   ),
@@ -171,11 +159,26 @@ class _HotelLoginScreenState extends State<HotelLoginScreen> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildBrandHeader() {
     return Column(
       children: [
-        const Icon(Icons.domain_rounded, size: 60, color: Color(0xFFD4AF37)),
-        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF141418),
+            border: Border.all(
+              color: const Color(0xFFD4AF37).withValues(alpha: 0.2),
+              width: 1.5,
+            ),
+          ),
+          child: const Icon(
+            Icons.hotel_class_rounded,
+            size: 42,
+            color: Color(0xFFD4AF37),
+          ),
+        ),
+        const SizedBox(height: 24),
         const Text(
           "Partner Console",
           style: TextStyle(
@@ -188,7 +191,10 @@ class _HotelLoginScreenState extends State<HotelLoginScreen> {
         const SizedBox(height: 6),
         Text(
           "Manage bids and track vacancy revenue",
-          style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14),
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.4),
+            fontSize: 14,
+          ),
         ),
       ],
     );
@@ -202,9 +208,9 @@ class _HotelLoginScreenState extends State<HotelLoginScreen> {
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.02),
+            color: Colors.white.withValues(alpha: 0.02),
             borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withOpacity(0.06)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
           ),
           child: Column(
             children: [
@@ -265,7 +271,7 @@ class _HotelLoginScreenState extends State<HotelLoginScreen> {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.03)),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.03)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -273,7 +279,9 @@ class _HotelLoginScreenState extends State<HotelLoginScreen> {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.redAccent.withOpacity(0.5)),
+          borderSide: BorderSide(
+            color: Colors.redAccent.withValues(alpha: 0.5),
+          ),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -295,7 +303,7 @@ class _HotelLoginScreenState extends State<HotelLoginScreen> {
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFD4AF37).withOpacity(0.15),
+            color: const Color(0xFFD4AF37).withValues(alpha: 0.15),
             blurRadius: 25,
             offset: const Offset(0, 8),
           ),
@@ -364,7 +372,7 @@ class _HotelLoginScreenState extends State<HotelLoginScreen> {
         height: constraints.maxWidth * 0.8,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: const Color(0xFFD4AF37).withOpacity(0.06),
+          color: const Color(0xFFD4AF37).withValues(alpha: 0.06),
         ),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 120, sigmaY: 120),

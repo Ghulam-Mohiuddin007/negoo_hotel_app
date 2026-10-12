@@ -239,7 +239,7 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
         const SizedBox(height: 6),
         Text(
           "Register your venue with live Google Maps geotagging",
-          style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14),
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 14),
           textAlign: TextAlign.center,
         ),
       ],
@@ -254,9 +254,9 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.02),
+            color: Colors.white.withValues(alpha: 0.02),
             borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withOpacity(0.06)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -341,8 +341,8 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: _selectedLocation != null
-              ? const Color(0xFFD4AF37).withOpacity(0.3)
-              : Colors.white.withOpacity(0.05),
+              ? const Color(0xFFD4AF37).withValues(alpha: 0.3)
+              : Colors.white.withValues(alpha: 0.05),
         ),
       ),
       child: Column(
@@ -369,7 +369,7 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.greenAccent.withOpacity(0.1),
+                    color: Colors.greenAccent.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text(
@@ -386,7 +386,7 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
           const SizedBox(height: 4),
           Text(
             "Auto-fetch coordinates using Google Maps or GPS satellite lock",
-            style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11),
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11),
           ),
           const SizedBox(height: 14),
 
@@ -407,8 +407,8 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
                     ),
                   ),
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: const Color(0xFFD4AF37).withOpacity(0.4)),
-                    backgroundColor: const Color(0xFFD4AF37).withOpacity(0.04),
+                    side: BorderSide(color: const Color(0xFFD4AF37).withValues(alpha: 0.4)),
+                    backgroundColor: const Color(0xFFD4AF37).withValues(alpha: 0.04),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -451,9 +451,9 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.02),
+                color: Colors.white.withValues(alpha: 0.02),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.04)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -481,7 +481,7 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFD4AF37).withOpacity(0.12),
+                          color: const Color(0xFFD4AF37).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -497,7 +497,7 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
                       Text(
                         "${_selectedLocation!.latitude.toStringAsFixed(4)}°, ${_selectedLocation!.longitude.toStringAsFixed(4)}°",
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.4),
+                          color: Colors.white.withValues(alpha: 0.4),
                           fontSize: 11,
                           fontFamily: 'monospace',
                         ),
@@ -581,7 +581,7 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
       contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.03)),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.03)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
@@ -589,7 +589,7 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: Colors.redAccent.withOpacity(0.5)),
+        borderSide: BorderSide(color: Colors.redAccent.withValues(alpha: 0.5)),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
@@ -605,7 +605,7 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFD4AF37).withOpacity(0.15),
+            color: const Color(0xFFD4AF37).withValues(alpha: 0.15),
             blurRadius: 25,
             offset: const Offset(0, 8),
           ),
@@ -674,7 +674,7 @@ class _HotelSignupScreenState extends State<HotelSignupScreen> {
         height: constraints.maxWidth * 0.8,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: const Color(0xFFD4AF37).withOpacity(0.08),
+          color: const Color(0xFFD4AF37).withValues(alpha: 0.08),
         ),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 120, sigmaY: 120),

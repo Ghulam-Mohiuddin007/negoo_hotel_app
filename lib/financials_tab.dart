@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:negoo_hotel_app/services/database_service.dart';
 import 'package:negoo_hotel_app/services/notification_service.dart';
+import 'package:negoo_hotel_app/services/redis_cache_service.dart';
 import 'package:negoo_hotel_app/services/toast_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -17,13 +19,43 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
   bool _isActionLoading = false;
   String _hotelName = "Hotel Partner";
   String _activeFilter = 'all'; // 'all', 'pending', 'confirmed', 'unpaid_commission'
+  List<Map<String, dynamic>> _bookings = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _supabase = Supabase.instance.client;
     _fetchHotelName();
+    _loadFinancialsFast();
     _subscribeToLiveBookings();
+  }
+
+  Future<void> _loadFinancialsFast() async {
+    // 1. Instant 0ms read from Redis cache
+    final cached = await RedisCacheService().getCachedBookings(widget.userId);
+    if (cached.isNotEmpty && mounted) {
+      setState(() {
+        _bookings = cached;
+        _isLoading = false;
+      });
+    }
+
+    // 2. Refresh from server in background
+    try {
+      final fresh = await DatabaseService().fetchHotelBookings(
+        widget.userId,
+        forceRefresh: true,
+      );
+      if (mounted) {
+        setState(() {
+          _bookings = fresh;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -46,7 +78,7 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
             table: 'bookings',
             callback: (payload) {
               debugPrint("⚡ Realtime booking change detected: ${payload.eventType}");
-              if (mounted) setState(() {});
+              _loadFinancialsFast();
             },
           )
           .subscribe();
@@ -198,23 +230,16 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<PostgrestList>(
-      future: _supabase
-          .from('bookings')
-          .select('*, rooms!fk_room(room_type, hotel_id)')
-          .eq('rooms.hotel_id', widget.userId)
-          .order('created_at', ascending: false),
-      builder: (context, futureSnapshot) {
-        if (futureSnapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: Color(0xFFD4AF37)),
-          );
-        }
+    if (_isLoading && _bookings.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFFD4AF37)),
+      );
+    }
 
-        final historicalRecords = (futureSnapshot.data ?? []).where((booking) {
-          final roomData = booking['rooms'] as Map<String, dynamic>?;
-          return roomData != null && roomData['hotel_id'] == widget.userId;
-        }).toList();
+    final historicalRecords = _bookings.where((booking) {
+      final roomData = booking['rooms'] as Map<String, dynamic>?;
+      return roomData != null && roomData['hotel_id'] == widget.userId;
+    }).toList();
 
         // 1. Calculate Financial Statements
         double totalEarningsGross = 0.0;
@@ -232,14 +257,13 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
 
           if (status == 'pending') {
             pendingCount++;
-          } else if (status == 'confirmed') {
+          } else if (status == 'confirmed' || status == 'checked_in' || status == 'checked_out') {
             confirmedCount++;
             totalEarningsGross += price;
             final commission = price * 0.10; // Negoo 10% commission
             confirmedCommissionTotal += commission;
 
-            final bool isPaid = tx['commission_paid'] == true ||
-                tx['commission_status'] == 'paid';
+            final bool isPaid = DatabaseService.isCommissionSettled(tx);
             if (isPaid) {
               paidCommissionToNegoo += commission;
             } else {
@@ -256,12 +280,16 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
         if (_activeFilter == 'pending') {
           filteredRecords = historicalRecords.where((b) => b['status'] == 'pending').toList();
         } else if (_activeFilter == 'confirmed') {
-          filteredRecords = historicalRecords.where((b) => b['status'] == 'confirmed').toList();
+          filteredRecords = historicalRecords.where((b) {
+            final s = b['status']?.toString().toLowerCase();
+            return s == 'confirmed' || s == 'checked_in' || s == 'checked_out';
+          }).toList();
         } else if (_activeFilter == 'unpaid_commission') {
           filteredRecords = historicalRecords.where((b) {
-            final isConfirmed = b['status'] == 'confirmed';
-            final isPaid = b['commission_paid'] == true || b['commission_status'] == 'paid';
-            return isConfirmed && !isPaid;
+            final s = b['status']?.toString().toLowerCase();
+            final isEligible = s == 'confirmed' || s == 'checked_in' || s == 'checked_out';
+            final isPaid = DatabaseService.isCommissionSettled(b);
+            return isEligible && !isPaid;
           }).toList();
         }
 
@@ -378,8 +406,6 @@ class _FinancialsTabScreenState extends State<FinancialsTabScreen> {
             ),
           ),
         );
-      },
-    );
   }
 
   /// Main Financials Card displaying Total Earnings, Negoo Commission, Unpaid Amount, and Net Balance

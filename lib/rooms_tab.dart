@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:negoo_hotel_app/services/redis_cache_service.dart';
 import 'package:negoo_hotel_app/services/toast_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -39,14 +40,25 @@ class _RoomsTabScreenState extends State<RoomsTabScreen> {
   }
 
   Future<void> _fetchRooms() async {
+    // 1. Read from Redis Cache immediately for 0ms render
+    final cached = RedisCacheService().getCachedRooms(widget.userId);
+    if (cached != null && cached.isNotEmpty && mounted) {
+      setState(() {
+        _rooms = cached;
+        _isLoading = false;
+      });
+    }
+
     try {
       final List<dynamic> data = await _supabase
           .from('rooms')
           .select()
           .eq('hotel_id', widget.userId);
+      final freshRooms = List<Map<String, dynamic>>.from(data);
+      await RedisCacheService().cacheRooms(widget.userId, freshRooms);
       if (mounted) {
         setState(() {
-          _rooms = List<Map<String, dynamic>>.from(data);
+          _rooms = freshRooms;
           _isLoading = false;
         });
       }
@@ -258,7 +270,7 @@ class _RoomsTabScreenState extends State<RoomsTabScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF121214),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.04)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
@@ -271,7 +283,7 @@ class _RoomsTabScreenState extends State<RoomsTabScreen> {
                 width: 70,
                 height: 70,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.01),
+                  color: Colors.white.withValues(alpha: 0.01),
                   borderRadius: BorderRadius.circular(14),
                   image: primaryThumb != null
                       ? DecorationImage(
@@ -306,7 +318,7 @@ class _RoomsTabScreenState extends State<RoomsTabScreen> {
                     Text(
                       "${roomItem['bed_type']} • Max Guests: ${roomItem['max_guests']}",
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.3),
+                        color: Colors.white.withValues(alpha: 0.3),
                         fontSize: 12,
                       ),
                     ),
@@ -550,12 +562,13 @@ class _RoomsTabScreenState extends State<RoomsTabScreen> {
                         color: Colors.redAccent,
                       ),
                       onPressed: () async {
+                        final nav = Navigator.of(context);
                         await _supabase
                             .from('rooms')
                             .delete()
                             .eq('id', initialData['id']);
                         if (!mounted) return;
-                        Navigator.pop(context);
+                        nav.pop();
                         _showSnackBar(
                           "Suite parameters permanently purged.",
                           Colors.orange,
@@ -611,6 +624,7 @@ class _RoomsTabScreenState extends State<RoomsTabScreen> {
                   height: 52,
                   child: ElevatedButton(
                     onPressed: () async {
+                      final nav = Navigator.of(context);
                       await _supabase
                           .from('rooms')
                           .update({
@@ -621,7 +635,7 @@ class _RoomsTabScreenState extends State<RoomsTabScreen> {
                           })
                           .eq('id', initialData['id']);
                       if (!mounted) return;
-                      Navigator.pop(context);
+                      nav.pop();
                       _showSnackBar(
                         "Suite registers modified successfully.",
                         Colors.green,
@@ -714,12 +728,12 @@ class _RoomsTabScreenState extends State<RoomsTabScreen> {
         fillColor: const Color(0xFF09090B),
         prefixIcon: Icon(
           icon,
-          color: const Color(0xFFD4AF37).withOpacity(0.6),
+          color: const Color(0xFFD4AF37).withValues(alpha: 0.6),
           size: 18,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.02)),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.02)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -737,7 +751,7 @@ class _RoomsTabScreenState extends State<RoomsTabScreen> {
           Icon(
             Icons.bed_outlined,
             size: 54,
-            color: Colors.white.withOpacity(0.05),
+            color: Colors.white.withValues(alpha: 0.05),
           ),
           const SizedBox(height: 16),
           const Text(

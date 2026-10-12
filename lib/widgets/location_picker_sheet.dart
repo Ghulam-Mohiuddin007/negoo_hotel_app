@@ -157,7 +157,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                     Text(
                       "Google Maps auto-fetch & GPS coordinate tagging",
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.4),
+                        color: Colors.white.withValues(alpha: 0.4),
                         fontSize: 12,
                       ),
                     ),
@@ -183,7 +183,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                   decoration: InputDecoration(
                     hintText: "Search hotel area, city or landmark...",
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 13),
+                    hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 13),
                     prefixIcon: const Icon(Icons.search, color: Color(0xFFD4AF37), size: 20),
                     suffixIcon: _isSearching
                         ? const Padding(
@@ -207,11 +207,11 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                               )
                             : null,
                     filled: true,
-                    fillColor: Colors.white.withOpacity(0.04),
+                    fillColor: Colors.white.withValues(alpha: 0.04),
                     contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.white.withOpacity(0.05)),
+                      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -246,9 +246,9 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                       ),
                     ),
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: const Color(0xFFD4AF37).withOpacity(0.4)),
+                      side: BorderSide(color: const Color(0xFFD4AF37).withValues(alpha: 0.4)),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      backgroundColor: const Color(0xFFD4AF37).withOpacity(0.05),
+                      backgroundColor: const Color(0xFFD4AF37).withValues(alpha: 0.05),
                     ),
                   ),
                 ),
@@ -275,7 +275,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                         leading: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFD4AF37).withOpacity(0.1),
+                            color: const Color(0xFFD4AF37).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(
@@ -298,7 +298,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.4),
+                                  color: Colors.white.withValues(alpha: 0.4),
                                   fontSize: 12,
                                 ),
                               )
@@ -327,7 +327,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: const Color(0xFF0E0E10),
-              border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+              border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
             ),
             child: SizedBox(
               width: double.infinity,
@@ -368,10 +368,10 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
       decoration: BoxDecoration(
         color: const Color(0xFF16161A),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.25)),
+        border: Border.all(color: const Color(0xFFD4AF37).withValues(alpha: 0.25)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
+            color: Colors.black.withValues(alpha: 0.4),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -385,7 +385,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD4AF37).withOpacity(0.12),
+                  color: const Color(0xFFD4AF37).withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -422,9 +422,9 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.greenAccent.withOpacity(0.1),
+                  color: Colors.greenAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+                  border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.3)),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
@@ -514,13 +514,13 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.02),
+                color: Colors.white.withValues(alpha: 0.02),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.map_outlined,
                 size: 54,
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
               ),
             ),
             const SizedBox(height: 16),
@@ -537,7 +537,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
               "Type in the search field above or press 'Auto-Fetch Current Location' to lock your hotel's exact GPS coordinates.",
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.3),
+                color: Colors.white.withValues(alpha: 0.3),
                 fontSize: 13,
                 height: 1.4,
               ),

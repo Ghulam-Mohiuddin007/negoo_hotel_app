@@ -53,7 +53,7 @@ class HotelPendingScreen extends StatelessWidget {
                           height: 120,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: const Color(0xFFD4AF37).withOpacity(0.03),
+                            color: const Color(0xFFD4AF37).withValues(alpha: 0.03),
                           ),
                         ),
                         const Icon(
@@ -89,12 +89,12 @@ class HotelPendingScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                       child: Container(
                         padding: const EdgeInsets.all(20),
-                        color: Colors.white.withOpacity(0.01),
+                        color: Colors.white.withValues(alpha: 0.01),
                         child: Text(
                           "Your property compliance files are currently being audited by the Negoo Operations Panel. The console dashboard features will automatically unlock the second authentication logs clear.",
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.35),
+                            color: Colors.white.withValues(alpha: 0.35),
                             fontSize: 13,
                             height: 1.5,
                           ),

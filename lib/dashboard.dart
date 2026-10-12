@@ -6,6 +6,7 @@ import 'package:negoo_hotel_app/negoo_payments_screen.dart';
 import 'package:negoo_hotel_app/rooms_tab.dart';
 import 'package:negoo_hotel_app/services/database_service.dart';
 import 'package:negoo_hotel_app/services/notification_service.dart';
+import 'package:negoo_hotel_app/services/redis_cache_service.dart';
 import 'package:negoo_hotel_app/services/toast_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -97,21 +98,31 @@ class _HotelDashboardScreenState extends State<HotelDashboardScreen> {
   }
 
   Future<void> _fetchHotelDetails() async {
-    try {
-      if (_currentUserId.isNotEmpty) {
-        final data = await _supabase
-            .from('hotels')
-            .select('hotel_name, name')
-            .eq('id', _currentUserId)
-            .maybeSingle();
+    if (_currentUserId.isEmpty) return;
 
-        if (data != null && mounted) {
-          setState(() {
-            _hotelName = data['hotel_name'] ?? data['name'] ?? "Negoo Venue";
-          });
-          
-          _setupNotifications();
-        }
+    // Instant 0ms read from Redis Cache
+    final cached = RedisCacheService().getCachedHotelProfile(_currentUserId);
+    if (cached != null && mounted) {
+      setState(() {
+        _hotelName = cached['hotel_name'] ?? cached['name'] ?? "Negoo Venue";
+      });
+      _setupNotifications();
+    }
+
+    try {
+      final data = await _supabase
+          .from('hotels')
+          .select('hotel_name, name, is_approved')
+          .eq('id', _currentUserId)
+          .maybeSingle();
+
+      if (data != null && mounted) {
+        await RedisCacheService().cacheHotelProfile(_currentUserId, data);
+        setState(() {
+          _hotelName = data['hotel_name'] ?? data['name'] ?? "Negoo Venue";
+        });
+        
+        _setupNotifications();
       }
     } catch (e) {
       debugPrint("Metadata parsing error: $e");

@@ -104,7 +104,7 @@ void onStart(ServiceInstance service) async {
     if (!Supabase.instance.isInitialized) {
       await Supabase.initialize(
         url: _supabaseUrl,
-        anonKey: _supabaseAnonKey,
+        publishableKey: _supabaseAnonKey,
       );
     }
     client = Supabase.instance.client;

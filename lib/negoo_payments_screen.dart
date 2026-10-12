@@ -15,12 +15,32 @@ class NegooPaymentsScreen extends StatefulWidget {
 class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
   final DatabaseService _databaseService = DatabaseService();
   String _activeFilter = 'all'; // 'all', 'unpaid', 'settled'
-  bool _isLoading = false;
 
-  /// Modal for hotel to submit remittance reference for Superadmin verification
+  /// Modal for hotel to submit referral number for Superadmin verification (One-time after check-out)
   void _showSubmitRemittanceDialog(Map<String, dynamic> booking) {
     final bookingId = booking['id'].toString();
     final uniqueId = BookingCacheService.formatUniqueBookingId(bookingId);
+    final status = (booking['status'] ?? '').toString().toLowerCase();
+    final bool isCheckedOut = status == 'checked_out' || booking['checked_out_at'] != null;
+    final bool isSettled = DatabaseService.isCommissionSettled(booking);
+    final existingRef = booking['remittance_ref']?.toString();
+    final bool alreadySubmitted = existingRef != null && existingRef.trim().isNotEmpty;
+
+    if (!isCheckedOut) {
+      ToastService.warning("Referral number can only be submitted after the guest has checked out.");
+      return;
+    }
+
+    if (alreadySubmitted) {
+      ToastService.info("Referral number ($existingRef) has already been submitted for this booking.");
+      return;
+    }
+
+    if (isSettled) {
+      ToastService.success("Commission dues for this booking have already been cleared by Super Admin!");
+      return;
+    }
+
     final price = double.tryParse(booking['total_price']?.toString() ?? '0') ?? 0.0;
     final commission = price * 0.10;
     final textController = TextEditingController();
@@ -39,7 +59,7 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
             const SizedBox(width: 8),
             const Expanded(
               child: Text(
-                "Submit Remittance Proof",
+                "Send Referral No. to Super Admin",
                 style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
@@ -50,6 +70,26 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.3)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_clock_rounded, color: Colors.purpleAccent, size: 12),
+                    SizedBox(width: 4),
+                    Text(
+                      "ONE-TIME SUBMISSION AFTER CHECK-OUT",
+                      style: TextStyle(color: Colors.purpleAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
               Text(
                 "Booking: $uniqueId",
                 style: const TextStyle(
@@ -61,8 +101,13 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
               ),
               const SizedBox(height: 4),
               Text(
+                "Guest: ${booking['full_name'] ?? 'Guest Traveler'}",
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              const SizedBox(height: 4),
+              Text(
                 "Negoo Commission Due: PKR ${commission.toStringAsFixed(0)}",
-                style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
               Container(
@@ -73,7 +118,7 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
                   border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                 ),
                 child: const Text(
-                  "ℹ️ Note: Only Negoo Corporate Superadmin can mark commission as PAID. Please provide your bank transaction ID / challan number below for admin verification.",
+                  "ℹ️ Note: Guest has checked out. Enter your bank transfer / JazzCash / EasyPaisa referral or transaction number. Super Admin will verify and clear your dues. This is a one-time submission.",
                   style: TextStyle(color: Colors.white60, fontSize: 11, height: 1.4),
                 ),
               ),
@@ -82,9 +127,9 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
                 controller: textController,
                 style: const TextStyle(color: Colors.white, fontSize: 14),
                 decoration: InputDecoration(
-                  labelText: "Transaction / Reference ID",
+                  labelText: "Referral / Transaction Number",
                   labelStyle: const TextStyle(color: Colors.white54, fontSize: 12),
-                  hintText: "e.g. TRX-9482104 or Slip No.",
+                  hintText: "e.g. REF-9482104 or Slip No.",
                   hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.2), fontSize: 12),
                   filled: true,
                   fillColor: Colors.black26,
@@ -110,16 +155,20 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
             onPressed: () async {
               final refCode = textController.text.trim();
               if (refCode.isEmpty) {
-                ToastService.warning("Please enter a valid reference ID.");
+                ToastService.warning("Please enter a valid referral or transaction number.");
                 return;
               }
               Navigator.pop(ctx);
-              final success = await _databaseService.submitRemittanceVerification(bookingId, refCode);
+              final success = await _databaseService.submitRemittanceVerification(
+                bookingId,
+                refCode,
+                hotelId: widget.userId,
+              );
               if (success) {
-                ToastService.success("Remittance submitted! Superadmin will audit & mark as paid.");
+                ToastService.success("Referral number sent to Super Admin! Admin will audit & clear dues.");
                 setState(() {});
               } else {
-                ToastService.error("Failed to submit reference. Please try again.");
+                ToastService.error("Failed to send referral number. Please try again.");
               }
             },
             style: ElevatedButton.styleFrom(
@@ -127,7 +176,7 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
               foregroundColor: Colors.black,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text("Submit for Audit", style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text("Send to Super Admin", style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -142,7 +191,7 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
         child: FutureBuilder<List<Map<String, dynamic>>>(
           future: _databaseService.fetchHotelBookings(widget.userId),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting && !_isLoading) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)));
             }
 
@@ -165,7 +214,7 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
                 final comm = price * 0.10; // Negoo 10% platform fee
                 totalNegooCommission += comm;
 
-                final isPaid = b['commission_paid'] == true || b['commission_status'] == 'paid';
+                final isPaid = DatabaseService.isCommissionSettled(b);
                 if (isPaid) {
                   settledCommission += comm;
                   settledCount++;
@@ -186,11 +235,11 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
 
             if (_activeFilter == 'unpaid') {
               displayed = displayed.where((b) {
-                return !(b['commission_paid'] == true || b['commission_status'] == 'paid');
+                return !DatabaseService.isCommissionSettled(b);
               }).toList();
             } else if (_activeFilter == 'settled') {
               displayed = displayed.where((b) {
-                return b['commission_paid'] == true || b['commission_status'] == 'paid';
+                return DatabaseService.isCommissionSettled(b);
               }).toList();
             }
 
@@ -555,8 +604,11 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
     final uniqueId = BookingCacheService.formatUniqueBookingId(rawId);
     final price = double.tryParse(booking['total_price']?.toString() ?? '0') ?? 0.0;
     final negooFee = price * 0.10;
-    final isSettled = booking['commission_paid'] == true || booking['commission_status'] == 'paid';
+    final isSettled = DatabaseService.isCommissionSettled(booking);
+    final bookingStatus = (booking['status'] ?? '').toString().toLowerCase();
+    final bool isCheckedOut = bookingStatus == 'checked_out' || booking['checked_out_at'] != null;
     final remittanceRef = booking['remittance_ref']?.toString();
+    final bool hasReferral = remittanceRef != null && remittanceRef.trim().isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -565,7 +617,11 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
         color: const Color(0xFF141418),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isSettled ? Colors.white.withValues(alpha: 0.04) : Colors.amber.withValues(alpha: 0.2),
+          color: isSettled
+              ? Colors.green.withValues(alpha: 0.25)
+              : (hasReferral
+                  ? Colors.cyan.withValues(alpha: 0.3)
+                  : (isCheckedOut ? Colors.amber.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.06))),
         ),
       ),
       child: Column(
@@ -591,25 +647,53 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isSettled ? Colors.green.withValues(alpha: 0.15) : Colors.amber.withValues(alpha: 0.15),
+                  color: isSettled
+                      ? Colors.green.withValues(alpha: 0.15)
+                      : (hasReferral
+                          ? Colors.cyan.withValues(alpha: 0.15)
+                          : (isCheckedOut
+                              ? Colors.amber.withValues(alpha: 0.15)
+                              : Colors.purple.withValues(alpha: 0.15))),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: isSettled ? Colors.greenAccent.withValues(alpha: 0.3) : Colors.amber.withValues(alpha: 0.3),
+                    color: isSettled
+                        ? Colors.greenAccent.withValues(alpha: 0.3)
+                        : (hasReferral
+                            ? Colors.cyanAccent.withValues(alpha: 0.3)
+                            : (isCheckedOut
+                                ? Colors.amber.withValues(alpha: 0.3)
+                                : Colors.purpleAccent.withValues(alpha: 0.3))),
                   ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      isSettled ? Icons.verified_rounded : Icons.hourglass_top_rounded,
+                      isSettled
+                          ? Icons.verified_rounded
+                          : (hasReferral
+                              ? Icons.send_and_archive_rounded
+                              : (isCheckedOut ? Icons.hourglass_top_rounded : Icons.bed_outlined)),
                       size: 11,
-                      color: isSettled ? Colors.greenAccent : Colors.amberAccent,
+                      color: isSettled
+                          ? Colors.greenAccent
+                          : (hasReferral
+                              ? Colors.cyanAccent
+                              : (isCheckedOut ? Colors.amberAccent : Colors.purpleAccent)),
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      isSettled ? "SETTLED BY SUPERADMIN" : "UNPAID TO NEGOO",
+                      isSettled
+                          ? "SETTLED BY SUPERADMIN"
+                          : (hasReferral
+                              ? "REFERRAL SENT • PENDING AUDIT"
+                              : (isCheckedOut ? "AWAITING REFERRAL NUMBER" : "IN STAY (AWAITING CHECK-OUT)")),
                       style: TextStyle(
-                        color: isSettled ? Colors.greenAccent : Colors.amberAccent,
+                        color: isSettled
+                            ? Colors.greenAccent
+                            : (hasReferral
+                                ? Colors.cyanAccent
+                                : (isCheckedOut ? Colors.amberAccent : Colors.purpleAccent)),
                         fontWeight: FontWeight.bold,
                         fontSize: 9,
                       ),
@@ -641,13 +725,19 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    "Cleared & Verified by Negoo Corporate Superadmin",
-                    style: TextStyle(color: Colors.greenAccent.withValues(alpha: 0.9), fontSize: 11, fontWeight: FontWeight.w600),
+                    hasReferral
+                        ? "Cleared & Verified by Super Admin (Ref: $remittanceRef)"
+                        : "Cleared & Verified by Negoo Corporate Super Admin",
+                    style: TextStyle(
+                      color: Colors.greenAccent.withValues(alpha: 0.9),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
             )
-          else if (remittanceRef != null && remittanceRef.isNotEmpty)
+          else if (hasReferral)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -658,17 +748,53 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
-                          "Ref: $remittanceRef (Pending Admin Audit)",
+                          "Referral No: $remittanceRef (Sent to Super Admin)",
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.cyanAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            color: Colors.cyanAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                TextButton(
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    "One-time lock 🔒",
+                    style: TextStyle(color: Colors.white54, fontSize: 10),
+                  ),
+                ),
+              ],
+            )
+          else if (isCheckedOut)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    "Guest checked out. Send referral number to admin:",
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.amberAccent.withValues(alpha: 0.8), fontSize: 11),
+                  ),
+                ),
+                ElevatedButton.icon(
                   onPressed: () => _showSubmitRemittanceDialog(booking),
-                  child: const Text("Edit Ref", style: TextStyle(color: Color(0xFFD4AF37), fontSize: 11)),
+                  icon: const Icon(Icons.send_rounded, size: 12),
+                  label: const Text("Send Referral No. (1-Time)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD4AF37),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
                 ),
               ],
             )
@@ -678,21 +804,22 @@ class _NegooPaymentsScreenState extends State<NegooPaymentsScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    "Superadmin awaits remittance proof",
+                    "🔒 Referral number unlocks after guest check-out",
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11),
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 11),
                   ),
                 ),
-                ElevatedButton.icon(
-                  onPressed: () => _showSubmitRemittanceDialog(booking),
-                  icon: const Icon(Icons.upload_file_rounded, size: 13),
-                  label: const Text("Submit Proof / Ref", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFD4AF37),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    ToastService.info("Referral number can only be submitted after guest check-out.");
+                  },
+                  icon: const Icon(Icons.lock_outline, size: 12),
+                  label: const Text("After Check-Out Only", style: TextStyle(fontSize: 10)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white38,
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
                   ),
                 ),
               ],

@@ -370,4 +370,21 @@ CREATE INDEX IF NOT EXISTS idx_bookings_commission_status ON public.bookings (co
 CREATE INDEX IF NOT EXISTS idx_bookings_commission_paid ON public.bookings (commission_paid);
 CREATE INDEX IF NOT EXISTS idx_bookings_remittance_ref ON public.bookings (remittance_ref);
 
+-- ------------------------------------------------------------------------------
+-- 9. FRONT DESK LIFECYCLE & PAYMENT EXTENSIONS ON BOOKINGS
+-- ------------------------------------------------------------------------------
+-- Ensures instant compatibility with Front Desk operations without schema cache errors
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS checked_out_at TIMESTAMPTZ;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMPTZ;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT false;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'pending';
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_method TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_received_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_bookings_is_paid ON public.bookings (is_paid);
+CREATE INDEX IF NOT EXISTS idx_bookings_payment_status ON public.bookings (payment_status);
+CREATE INDEX IF NOT EXISTS idx_bookings_checked_out_at ON public.bookings (checked_out_at);
+
+
 

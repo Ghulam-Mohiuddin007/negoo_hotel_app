@@ -152,11 +152,20 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
 
     HapticFeedback.mediumImpact();
 
+    // Optimistic UI update
+    if (mounted) {
+      setState(() {
+        booking['status'] = 'confirmed';
+        _applyFilterAndSearch();
+      });
+    }
+
     final success = await _databaseService.confirmBooking(
       bookingId: bookingId,
       guestUserId: guestUserId,
       hotelName: _hotelName,
       roomType: roomType,
+      hotelId: widget.userId,
     );
 
     if (success) {
@@ -174,10 +183,19 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
 
     HapticFeedback.lightImpact();
 
+    // Optimistic UI update
+    if (mounted) {
+      setState(() {
+        booking['status'] = 'checked_in';
+        _applyFilterAndSearch();
+      });
+    }
+
     final success = await _databaseService.checkInGuest(
       bookingId: bookingId,
       guestUserId: guestUserId,
       hotelName: _hotelName,
+      hotelId: widget.userId,
     );
 
     if (success) {
@@ -192,9 +210,20 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
   Future<void> _recordPaymentReceived(Map<String, dynamic> booking, String method) async {
     final bookingId = booking['id'].toString();
 
+    // Optimistic UI update
+    if (mounted) {
+      setState(() {
+        booking['is_paid'] = true;
+        booking['payment_status'] = 'received';
+        booking['payment_method'] = method;
+        _applyFilterAndSearch();
+      });
+    }
+
     final success = await _databaseService.recordPaymentReceived(
       bookingId: bookingId,
       method: method,
+      hotelId: widget.userId,
     );
 
     if (success) {
@@ -212,15 +241,20 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
     final roomData = booking['rooms'] as Map<String, dynamic>?;
     final roomType = roomData?['room_type'] ?? 'Standard Room';
 
+    // Optimistic UI update
+    if (mounted) {
+      setState(() {
+        booking['status'] = 'checked_out';
+        _applyFilterAndSearch();
+      });
+    }
+
     try {
-      // 1. Update Booking row status to checked_out
-      await _supabase
-          .from('bookings')
-          .update({
-            'status': 'checked_out',
-            'checked_out_at': now,
-          })
-          .eq('id', bookingId);
+      // 1. Record Check-out via DatabaseService with resilient schema fallback (no checked_out_at crash)
+      await _databaseService.recordCheckOut(
+        bookingId: bookingId,
+        hotelId: widget.userId,
+      );
 
       // 2. Prepare payload to save in the dedicated 'guest_archive' table
       final archivePayload = {
@@ -235,20 +269,29 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
         'stay_from': booking['stay_from'] ?? '',
         'stay_to': booking['stay_to'] ?? '',
         'payment_method': booking['payment_method'] ?? 'cash',
-        'payment_status': booking['payment_status'] ?? 'received',
+        'payment_status': 'received',
         'checked_in_at': booking['checked_in_at'] ?? now,
         'checked_out_at': now,
         'archived_at': now,
       };
 
       // 3. Attempt insert into guest_archive table via DatabaseService
-      await _databaseService.archiveGuestRecord(archivePayload);
+      await _databaseService.archiveGuestRecord(archivePayload, hotelId: widget.userId);
 
       // 4. Save into persistent local archive cache for instant offline retrieval
       await _cacheService.cacheArchivedRecord(widget.userId, archivePayload);
 
       ToastService.success("Guest checked out & archived into database! 🗄️");
       _fetchServerBookings(showLoading: false);
+
+      // Offer immediate one-time referral submission after checkout
+      if (mounted) {
+        Future.delayed(const Duration(milliseconds: 350), () {
+          if (mounted) {
+            _showReferralSubmissionDialog(booking);
+          }
+        });
+      }
     } catch (e) {
       ToastService.error("Check-out error: $e");
     }
@@ -490,7 +533,8 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
     final status = booking['status']?.toString().toLowerCase() ?? 'pending';
     final bool isPaid = booking['is_paid'] == true ||
         booking['payment_status'] == 'received' ||
-        booking['payment_status'] == 'paid';
+        booking['payment_status'] == 'paid' ||
+        booking['commission_status'] == 'paid';
     final price = booking['total_price'] ?? '0';
 
     return Container(
@@ -786,23 +830,239 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
     }
 
     // Checked out / Archived
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.purple.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: const Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.inventory_2_outlined, color: Colors.purpleAccent, size: 14),
-          SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              "COMPLETED & ARCHIVED IN GUEST DATABASE",
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 11),
+    final bool isSettled = DatabaseService.isCommissionSettled(booking);
+    final String? refCode = booking['remittance_ref']?.toString();
+    final bool hasRef = refCode != null && refCode.trim().isNotEmpty;
+
+    if (isSettled) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.green.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.verified_rounded, color: Colors.greenAccent, size: 14),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                hasRef
+                    ? "DUES CLEARED BY SUPER ADMIN (REF: $refCode) ✅"
+                    : "DUES CLEARED & SETTLED BY SUPER ADMIN ✅",
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 11),
+              ),
             ),
+          ],
+        ),
+      );
+    }
+
+    if (hasRef) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.cyan.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.receipt_long_outlined, color: Colors.cyanAccent, size: 14),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                "REFERRAL NO: $refCode (SENT TO ADMIN • PENDING CLEARANCE)",
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 11),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _showReferralSubmissionDialog(booking),
+            icon: const Icon(Icons.send_rounded, size: 13),
+            label: const Text(
+              "SEND REFERRAL NO. TO ADMIN (1-TIME)",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD4AF37),
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showReferralSubmissionDialog(Map<String, dynamic> booking) {
+    final bookingId = booking['id'].toString();
+    final uniqueId = BookingCacheService.formatUniqueBookingId(bookingId);
+    final isSettled = DatabaseService.isCommissionSettled(booking);
+    final existingRef = booking['remittance_ref']?.toString();
+    final bool alreadySubmitted = existingRef != null && existingRef.trim().isNotEmpty;
+
+    if (isSettled) {
+      ToastService.success("Commission dues for this booking have already been cleared by Super Admin!");
+      return;
+    }
+
+    if (alreadySubmitted) {
+      ToastService.info("Referral number ($existingRef) has already been sent to Super Admin (Locked).");
+      return;
+    }
+
+    final price = double.tryParse(booking['total_price']?.toString() ?? '0') ?? 0.0;
+    final commission = price * 0.10;
+    final textController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF141418),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: const Color(0xFFD4AF37).withValues(alpha: 0.3)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.shield_outlined, color: Color(0xFFD4AF37), size: 22),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                "Send Referral No. to Super Admin",
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.3)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_clock_rounded, color: Colors.purpleAccent, size: 12),
+                    SizedBox(width: 4),
+                    Text(
+                      "ONE-TIME SUBMISSION (CHECKED OUT)",
+                      style: TextStyle(color: Colors.purpleAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                "Booking: $uniqueId",
+                style: const TextStyle(
+                  color: Color(0xFFD4AF37),
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'monospace',
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Guest: ${booking['full_name'] ?? 'Guest Traveler'}",
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Negoo Commission Due: PKR ${commission.toStringAsFixed(0)}",
+                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.04),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                ),
+                child: const Text(
+                  "ℹ️ Note: Guest has checked out. Please provide the referral or transaction number for Super Admin to verify and clear platform dues. This is a one-time submission.",
+                  style: TextStyle(color: Colors.white60, fontSize: 11, height: 1.4),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: textController,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                decoration: InputDecoration(
+                  labelText: "Referral / Transaction Number",
+                  labelStyle: const TextStyle(color: Colors.white54, fontSize: 12),
+                  hintText: "e.g. REF-9482104 or Slip No.",
+                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.2), fontSize: 12),
+                  filled: true,
+                  fillColor: Colors.black26,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFD4AF37), width: 1.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Later", style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final refCode = textController.text.trim();
+              if (refCode.isEmpty) {
+                ToastService.warning("Please enter a valid referral or transaction number.");
+                return;
+              }
+              Navigator.pop(ctx);
+              final success = await _databaseService.submitRemittanceVerification(
+                bookingId,
+                refCode,
+                hotelId: widget.userId,
+              );
+              if (success) {
+                ToastService.success("Referral number sent to Super Admin! Admin will audit & clear dues.");
+                booking['remittance_ref'] = refCode;
+                booking['remittance_status'] = 'pending_superadmin_verification';
+                _fetchServerBookings(showLoading: false);
+              } else {
+                ToastService.error("Failed to send referral number. Please try again.");
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD4AF37),
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text("Send to Super Admin", style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

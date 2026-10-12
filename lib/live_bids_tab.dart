@@ -1,8 +1,9 @@
-import 'package:negoo_hotel_app/services/notification_service.dart';
-import 'package:negoo_hotel_app/services/toast_service.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:negoo_hotel_app/services/notification_service.dart';
+import 'package:negoo_hotel_app/services/redis_cache_service.dart';
+import 'package:negoo_hotel_app/services/toast_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class HotelIncomingBidsScreen extends StatefulWidget {
@@ -102,7 +103,7 @@ class _BidTimerCardState extends State<BidTimerCard> {
   Timer? _countdownTicker;
   int _secondsLeft = 60;
   bool _isProcessingAction = false;
-  
+
   String _roomType = "Premium Suite";
   double _standardPrice = 0.0;
   String _guestName = "Negoo Traveler";
@@ -116,15 +117,34 @@ class _BidTimerCardState extends State<BidTimerCard> {
     _fetchMetadata();
   }
 
-  // Fetches details of the room and guest name in parallel
+  // Fast Redis-cached metadata fetch for room & traveler parameters
   Future<void> _fetchMetadata() async {
+    final roomId = widget.bidData['room_id']?.toString() ?? '';
+    final userId = widget.bidData['user_id']?.toString() ?? '';
+    final redis = RedisCacheService();
+
+    // Check Redis Cache first for 0ms lookup
+    final cached = redis.getBidMetadata(roomId, userId);
+    if (cached != null) {
+      final room = cached['room'] as Map<String, dynamic>?;
+      final guest = cached['guest'] as Map<String, dynamic>?;
+      if (room != null) {
+        _roomType = room['room_type'] ?? "Premium Suite";
+        _standardPrice = double.tryParse(room['price'].toString()) ?? 0.0;
+      }
+      if (guest != null) {
+        _guestName = guest['full_name'] ?? "Negoo Traveler";
+      }
+      _isLoadingMetadata = false;
+      if (mounted) setState(() {});
+      return;
+    }
+
     try {
       final supabase = Supabase.instance.client;
-      final roomId = widget.bidData['room_id'];
-      final userId = widget.bidData['user_id'];
 
       Future<Map<String, dynamic>?> roomFuture = Future.value(null);
-      if (roomId != null) {
+      if (roomId.isNotEmpty) {
         roomFuture = supabase
             .from('rooms')
             .select('room_type, price')
@@ -133,7 +153,7 @@ class _BidTimerCardState extends State<BidTimerCard> {
       }
 
       Future<Map<String, dynamic>?> guestFuture = Future.value(null);
-      if (userId != null) {
+      if (userId.isNotEmpty) {
         guestFuture = supabase
             .from('profiles')
             .select('full_name')
@@ -145,11 +165,18 @@ class _BidTimerCardState extends State<BidTimerCard> {
       final roomData = results[0];
       final guestData = results[1];
 
+      // Save to Redis cache for instant subsequent lookups
+      redis.cacheBidMetadata(roomId, userId, {
+        'room': roomData,
+        'guest': guestData,
+      });
+
       if (mounted) {
         setState(() {
           if (roomData != null) {
             _roomType = roomData['room_type'] ?? "Premium Suite";
-            _standardPrice = double.tryParse(roomData['price'].toString()) ?? 0.0;
+            _standardPrice =
+                double.tryParse(roomData['price'].toString()) ?? 0.0;
           }
           if (guestData != null) {
             _guestName = guestData['full_name'] ?? "Negoo Traveler";
@@ -170,9 +197,8 @@ class _BidTimerCardState extends State<BidTimerCard> {
       widget.bidData['expires_at'],
     ).toLocal();
     final DateTime currentSystemTime = DateTime.now();
-    final int dynamicDifference = targetExpiration
-        .difference(currentSystemTime)
-        .inSeconds;
+    final int dynamicDifference =
+        targetExpiration.difference(currentSystemTime).inSeconds;
 
     _secondsLeft = dynamicDifference > 0 ? dynamicDifference : 0;
   }
@@ -211,7 +237,7 @@ class _BidTimerCardState extends State<BidTimerCard> {
           .update({'status': approveAllocation ? 'accepted' : 'declined'})
           .eq('id', widget.bidData['id']);
 
-      // Instant Pure Supabase Realtime Notification to Guest
+      // Instant Realtime Notification to Guest
       if (widget.bidData['user_id'] != null) {
         NotificationService().sendNotificationToUser(
           userId: widget.bidData['user_id'].toString(),
@@ -225,7 +251,7 @@ class _BidTimerCardState extends State<BidTimerCard> {
           },
         );
       }
-      
+
       if (approveAllocation) {
         ToastService.success("Bid accepted!");
       } else {
@@ -248,7 +274,8 @@ class _BidTimerCardState extends State<BidTimerCard> {
     if (_secondsLeft <= 0) return const SizedBox.shrink();
 
     final progress = _secondsLeft / 60.0;
-    final progressColor = _secondsLeft <= 15 ? Colors.redAccent : const Color(0xFFD4AF37);
+    final progressColor =
+        _secondsLeft <= 15 ? Colors.redAccent : const Color(0xFFD4AF37);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 18),
@@ -257,15 +284,17 @@ class _BidTimerCardState extends State<BidTimerCard> {
         color: const Color(0xFF121214),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: _secondsLeft <= 15 ? Colors.redAccent.withOpacity(0.15) : Colors.white.withOpacity(0.03),
+          color: _secondsLeft <= 15
+              ? Colors.redAccent.withValues(alpha: 0.15)
+              : Colors.white.withValues(alpha: 0.03),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
             blurRadius: 10,
             offset: const Offset(0, 4),
-          )
+          ),
         ],
       ),
       child: Column(
@@ -299,18 +328,27 @@ class _BidTimerCardState extends State<BidTimerCard> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
-                  color: _secondsLeft <= 15 ? Colors.red.withOpacity(0.1) : const Color(0xFFD4AF37).withOpacity(0.1),
+                  color: _secondsLeft <= 15
+                      ? Colors.red.withValues(alpha: 0.1)
+                      : const Color(0xFFD4AF37).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(30),
                   border: Border.all(
-                    color: _secondsLeft <= 15 ? Colors.redAccent.withOpacity(0.3) : const Color(0xFFD4AF37).withOpacity(0.3),
+                    color: _secondsLeft <= 15
+                        ? Colors.redAccent.withValues(alpha: 0.3)
+                        : const Color(0xFFD4AF37).withValues(alpha: 0.3),
                   ),
                 ),
                 child: Text(
                   "${_secondsLeft}s left",
                   style: TextStyle(
-                    color: _secondsLeft <= 15 ? Colors.redAccent : const Color(0xFFD4AF37),
+                    color: _secondsLeft <= 15
+                        ? Colors.redAccent
+                        : const Color(0xFFD4AF37),
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
@@ -327,16 +365,32 @@ class _BidTimerCardState extends State<BidTimerCard> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("Standard Price", style: TextStyle(color: Colors.white38, fontSize: 11)),
+                    const Text(
+                      "Standard Price",
+                      style: TextStyle(color: Colors.white38, fontSize: 11),
+                    ),
                     const SizedBox(height: 2),
-                    Text("PKR ${_standardPrice.toStringAsFixed(0)}", style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                    Text(
+                      "PKR ${_standardPrice.toStringAsFixed(0)}",
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
                   ],
                 ),
-                const Icon(Icons.arrow_forward_rounded, color: Colors.white24, size: 16),
+                const Icon(
+                  Icons.arrow_forward_rounded,
+                  color: Colors.white24,
+                  size: 16,
+                ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    const Text("Proposed Offer", style: TextStyle(color: Colors.white38, fontSize: 11)),
+                    const Text(
+                      "Proposed Offer",
+                      style: TextStyle(color: Colors.white38, fontSize: 11),
+                    ),
                     const SizedBox(height: 2),
                     Text(
                       "PKR ${widget.bidData['bid_amount']}",
@@ -358,7 +412,7 @@ class _BidTimerCardState extends State<BidTimerCard> {
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 4,
-              backgroundColor: Colors.white.withOpacity(0.05),
+              backgroundColor: Colors.white.withValues(alpha: 0.05),
               valueColor: AlwaysStoppedAnimation<Color>(progressColor),
             ),
           ),
@@ -368,7 +422,9 @@ class _BidTimerCardState extends State<BidTimerCard> {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: _isProcessingAction ? null : () => _updateBidStatus(false),
+                  onPressed: _isProcessingAction
+                      ? null
+                      : () => _updateBidStatus(false),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.redAccent,
                     side: const BorderSide(color: Colors.redAccent, width: 1.5),
@@ -379,14 +435,19 @@ class _BidTimerCardState extends State<BidTimerCard> {
                   ),
                   child: const Text(
                     "DECLINE",
-                    style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _isProcessingAction ? null : () => _updateBidStatus(true),
+                  onPressed: _isProcessingAction
+                      ? null
+                      : () => _updateBidStatus(true),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFD4AF37),
                     foregroundColor: Colors.black,
@@ -394,12 +455,23 @@ class _BidTimerCardState extends State<BidTimerCard> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    elevation: 0,
                   ),
-                  child: const Text(
-                    "ACCEPT",
-                    style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                  ),
+                  child: _isProcessingAction
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.black,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          "ACCEPT DEAL",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                 ),
               ),
             ],

@@ -1,6 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:negoo_hotel_app/dashboard.dart';
 import 'package:negoo_hotel_app/login.dart';
+import 'package:negoo_hotel_app/pending.dart';
+import 'package:negoo_hotel_app/services/notification_service.dart';
+import 'package:negoo_hotel_app/services/redis_cache_service.dart';
+import 'package:negoo_hotel_app/verification.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class HotelSplashScreen extends StatefulWidget {
   const HotelSplashScreen({super.key});
@@ -15,52 +21,121 @@ class _HotelSplashScreenState extends State<HotelSplashScreen>
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
 
+  Widget? _targetDestination;
+  bool _animationCompleted = false;
+
   @override
   void initState() {
     super.initState();
 
-    // 1. Initialize the Animation Controller (2-second total duration)
+    // 1. Initialize the Animation Controller (1.6-second smooth duration)
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 1600),
     );
 
-    // 2. Scale Animation for the branding icon (0.0 to 1.0 with a smooth easeOutBack curve)
+    // 2. Scale Animation for branding icon (smooth easeOutBack)
     _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
-        curve: const Interval(0.0, 0.60, curve: Curves.easeOutBack),
+        curve: const Interval(0.0, 0.65, curve: Curves.easeOutBack),
       ),
     );
 
-    // 3. Fade Animation for the text labels (Starts halfway through the icon animation)
+    // 3. Fade Animation for luxury typography
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
-        curve: const Interval(0.40, 1.0, curve: Curves.easeIn),
+        curve: const Interval(0.35, 1.0, curve: Curves.easeIn),
       ),
     );
 
-    // 4. Start the animation engine
-    _animationController.forward();
-
-    // 5. Navigate to the Hotel Login screen after the animation completes
-    Timer(const Duration(milliseconds: 3500), () {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) =>
-                const HotelLoginScreen(),
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) {
-                  return FadeTransition(opacity: animation, child: child);
-                },
-            transitionDuration: const Duration(milliseconds: 800),
-          ),
-        );
-      }
+    _animationController.forward().then((_) {
+      _animationCompleted = true;
+      _attemptNavigation();
     });
+
+    // 4. Resolve session and permissions in parallel with animation
+    _resolveSessionAndWarmup();
+  }
+
+  Future<void> _resolveSessionAndWarmup() async {
+    try {
+      // Warm up Redis Cache engine
+      await RedisCacheService().warmup();
+
+      // Initialize NotificationService non-blockingly
+      NotificationService().initialize().catchError((e) {
+        debugPrint("Notification non-blocking init note: $e");
+      });
+
+      final supabase = Supabase.instance.client;
+      final Session? activeSession = supabase.auth.currentSession;
+
+      if (activeSession == null) {
+        _targetDestination = const HotelLoginScreen();
+      } else {
+        final userId = activeSession.user.id;
+
+        // Check Redis cache for instant 0ms hotel profile read
+        final cachedProfile = RedisCacheService().getCachedHotelProfile(userId);
+        if (cachedProfile != null) {
+          final isApproved = cachedProfile['is_approved'] ?? false;
+          final hotelName = cachedProfile['hotel_name'] ?? cachedProfile['name'] ?? 'Partner';
+          if (isApproved) {
+            _targetDestination = const HotelDashboardScreen();
+          } else {
+            _targetDestination = HotelPendingScreen(userId: userId, hotelName: hotelName);
+          }
+        } else {
+          // Query Supabase for latest approval state
+          final record = await supabase
+              .from('hotels')
+              .select('is_approved, hotel_name, name, owner_cnic_url')
+              .eq('id', userId)
+              .maybeSingle();
+
+          if (record != null) {
+            await RedisCacheService().cacheHotelProfile(userId, record);
+            final bool isApproved = record['is_approved'] ?? false;
+            final String name = record['hotel_name'] ?? record['name'] ?? 'Partner';
+            final String? cnicUrl = record['owner_cnic_url'];
+
+            if (isApproved) {
+              _targetDestination = const HotelDashboardScreen();
+            } else if (cnicUrl != null && cnicUrl.isNotEmpty) {
+              _targetDestination = HotelPendingScreen(userId: userId, hotelName: name);
+            } else {
+              _targetDestination = HotelVerificationScreen(userId: userId, hotelName: name);
+            }
+          } else {
+            _targetDestination = const HotelLoginScreen();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Splash session resolution fallback: $e");
+      _targetDestination = const HotelLoginScreen();
+    }
+
+    if (_animationCompleted) {
+      _attemptNavigation();
+    }
+  }
+
+  void _attemptNavigation() {
+    if (!mounted || _targetDestination == null) return;
+
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => _targetDestination!,
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 400),
+      ),
+    );
   }
 
   @override
@@ -72,9 +147,7 @@ class _HotelSplashScreenState extends State<HotelSplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(
-        0xFF0A0A0A,
-      ), // Deep Obsidian matching the auth workflow
+      backgroundColor: const Color(0xFF0A0A0A), // Deep Obsidian
       body: Stack(
         children: [
           _buildBackgroundSubtleGlow(),
@@ -89,9 +162,9 @@ class _HotelSplashScreenState extends State<HotelSplashScreen>
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.01),
+                      color: Colors.white.withValues(alpha: 0.01),
                       border: Border.all(
-                        color: const Color(0xFFD4AF37).withOpacity(0.1),
+                        color: const Color(0xFFD4AF37).withValues(alpha: 0.1),
                       ),
                     ),
                     child: const Icon(
@@ -113,8 +186,7 @@ class _HotelSplashScreenState extends State<HotelSplashScreen>
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 32,
-                          fontWeight:
-                              FontWeight.w200, // Minimalist fine typography
+                          fontWeight: FontWeight.w200,
                           letterSpacing: 8.0,
                         ),
                       ),
@@ -122,7 +194,7 @@ class _HotelSplashScreenState extends State<HotelSplashScreen>
                       Text(
                         "PARTNER SYSTEM",
                         style: TextStyle(
-                          color: const Color(0xFFD4AF37).withOpacity(0.7),
+                          color: const Color(0xFFD4AF37).withValues(alpha: 0.7),
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 4.0,
@@ -166,10 +238,10 @@ class _HotelSplashScreenState extends State<HotelSplashScreen>
         height: 300,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: const Color(0xFFD4AF37).withOpacity(0.02),
+          color: const Color(0xFFD4AF37).withValues(alpha: 0.02),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFD4AF37).withOpacity(0.03),
+              color: const Color(0xFFD4AF37).withValues(alpha: 0.03),
               blurRadius: 100,
               spreadRadius: 50,
             ),
